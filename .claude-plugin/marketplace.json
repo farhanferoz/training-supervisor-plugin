@@ -7,10 +7,10 @@
   },
   "plugins": [
     {
-      "name": "training-monitor",
-      "description": "Prediction-first autonomous monitoring for ML/DL training jobs. Orchestrates sub-agents for parallel job monitoring and anomaly investigation. Includes domain skills for GRPO/RL, distributed training, Kubernetes, and W&B.",
+      "name": "training-supervisor",
+      "description": "Qualitative-first autonomous supervision for ML/DL training jobs. Orchestrates sub-agents for parallel job monitoring and anomaly investigation. Includes domain skills for GRPO/RL, distributed training, Kubernetes, and W&B.",
       "category": "development",
-      "source": "./plugins/training-monitor",
+      "source": "./plugins/training-supervisor",
       "homepage": "https://github.com/t2ance/training-monitor-plugin"
     }
   ]
