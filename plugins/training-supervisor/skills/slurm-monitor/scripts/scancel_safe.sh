@@ -69,7 +69,14 @@ log_dir="$STATE_DIR/sessions/$ts"
 mkdir -p "$log_dir"
 log_path="$log_dir/5-act.md"
 
-cmd=(ssh "$SSH_HOST" scancel "$JOB_ID")
+# Validate SSH_HOST: a hostname starting with '-' would be interpreted as an
+# ssh option flag (hostname-option injection). Reject it early.
+if [[ "$SSH_HOST" == -* ]]; then
+    echo "scancel_safe: REFUSED — SSH_HOST must not start with '-' (got '$SSH_HOST')" >&2
+    exit 2
+fi
+
+cmd=(ssh -- "$SSH_HOST" scancel "$JOB_ID")
 if [[ "$DRY_RUN" -eq 1 ]]; then
     rc=0
     out="(dry-run — would have executed: ${cmd[*]})"

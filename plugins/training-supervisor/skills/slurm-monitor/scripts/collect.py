@@ -38,12 +38,19 @@ def _sjob(job_id: str, sub: str, ssh_host: str | None) -> tuple[int, str, str]:
     """Invoke ~/bin/sjob, optionally via ssh.
 
     If ssh_host is None or empty string, runs sjob locally (no SSH hop).
+
+    The ``--`` separator is passed to ssh to prevent a hostname that begins
+    with ``-`` from being interpreted as an option flag (hostname-option
+    injection, H-new).
     """
     if not job_id.isdigit():
         msg = f"job_id must be digits; got {job_id!r}"
         raise ValueError(msg)
     if ssh_host:
-        cmd = ["ssh", ssh_host, "sjob", job_id, sub]
+        if ssh_host.startswith("-"):
+            msg = f"ssh_host must not start with '-' (got {ssh_host!r}); this would be interpreted as an ssh option"
+            raise ValueError(msg)
+        cmd = ["ssh", "--", ssh_host, "sjob", job_id, sub]
     else:
         cmd = ["sjob", job_id, sub]
     return _run(cmd)

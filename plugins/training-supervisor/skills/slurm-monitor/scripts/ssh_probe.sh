@@ -7,5 +7,13 @@
 # will reject unknown hosts; this is intentional to prevent MITM attacks.
 set -euo pipefail
 host="${1:?usage: ssh_probe.sh <host>}"
+
+# Reject a hostname starting with '-': ssh would interpret it as an option flag
+# (hostname-option injection, H-new).
+if [[ "$host" == -* ]]; then
+    echo "ssh_probe: hostname must not start with '-' (got '$host')" >&2
+    exit 2
+fi
+
 ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes \
-    "$host" 'true' 2>&1
+    -- "$host" 'true' 2>&1

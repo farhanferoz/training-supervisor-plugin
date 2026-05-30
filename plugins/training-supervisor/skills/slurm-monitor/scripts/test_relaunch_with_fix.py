@@ -162,6 +162,52 @@ def test_write_next_action_shlex_quotes_overrides(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# C2-v2: double-quoting for remote shell safety
+# ---------------------------------------------------------------------------
+
+def test_write_next_action_quotes_for_remote_shell(tmp_path):
+    """Override with shell metacharacter is safe across both quoting layers (C2-v2).
+
+    The semicolon must appear inside a quoted context in the generated script
+    so the remote shell never sees it as a statement separator.  Specifically:
+    shlex.split() on the ssh invocation line should yield the full override
+    string as a single token.
+    """
+    import shlex
+    next_action = tmp_path / "next_action.sh"
+    rendered._write_next_action(
+        path=str(next_action),
+        template="ssh {HOST} autocast epd --mode slurm {OVERRIDES}",
+        ssh_host="login.example",
+        overrides=["datamodule.batch_size=32; touch /tmp/INJECTED"],
+    )
+    body = next_action.read_text()
+    # Strip the preamble (shebang + comment + set line) to get the ssh line.
+    ssh_line = [ln for ln in body.splitlines() if ln.startswith("ssh")][0]
+    tokens = shlex.split(ssh_line)
+    # tokens: ["ssh", "--", "login.example", "<full remote cmd with override>"]
+    # The remote cmd string must contain the override as one token (no split).
+    remote_cmd = tokens[-1]
+    # The full override value including the semicolon must appear inside the
+    # remote cmd (which is passed as a single quoted argument to ssh).
+    assert "datamodule.batch_size=32; touch /tmp/INJECTED" in remote_cmd
+    # The ssh invocation must use -- to guard against hostname option injection.
+    assert "--" in tokens
+
+
+def test_write_next_action_rejects_dash_hostname(tmp_path):
+    """_write_next_action rejects a hostname starting with '-' (H-new)."""
+    next_action = tmp_path / "next_action.sh"
+    with pytest.raises(ValueError, match="ssh_host"):
+        rendered._write_next_action(
+            path=str(next_action),
+            template="ssh {HOST} autocast epd {OVERRIDES}",
+            ssh_host="-oProxyCommand=touch /tmp/pwned",
+            overrides=[],
+        )
+
+
+# ---------------------------------------------------------------------------
 # C1: risk-value validation
 # ---------------------------------------------------------------------------
 

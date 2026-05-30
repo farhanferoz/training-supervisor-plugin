@@ -40,8 +40,9 @@ def test_collect_running_job_produces_markdown_with_state_and_trajectories():
     )
     cmds = {
         # Distinguish status vs when so the test reflects the real two-call flow.
-        ("ssh", "host.example", "sjob", "12345", "status"): sjob_out,
-        ("ssh", "host.example", "sjob", "12345", "when"):
+        # _sjob now uses "ssh -- <host> ..." so the stub key includes "--".
+        ("ssh", "--", "host.example", "sjob", "12345", "status"): sjob_out,
+        ("ssh", "--", "host.example", "sjob", "12345", "when"):
             "Reason=None  StartTime=2026-05-29T10:00:00  EndTime=Unknown\n",
         ("wbcheck",): wbcheck_out,
     }
@@ -116,8 +117,8 @@ def test_collect_emits_all_four_required_contract_sections():
     )
     wbcheck_out = "state=running epoch=50\n"
     cmds = {
-        ("ssh", "h", "sjob", "99999", "status"): sjob_out,
-        ("ssh", "h", "sjob", "99999", "when"): "end=Unknown\n",
+        ("ssh", "--", "h", "sjob", "99999", "status"): sjob_out,
+        ("ssh", "--", "h", "sjob", "99999", "when"): "end=Unknown\n",
         ("wbcheck",): wbcheck_out,
     }
     with mock.patch.object(collect.subprocess, "run", side_effect=_stub_run(cmds)):
@@ -139,11 +140,11 @@ def test_collect_emits_all_four_required_contract_sections():
 def test_collect_heartbeat_verdict_present():
     """## heartbeat section must contain a verdict line (H1)."""
     cmds = {
-        ("ssh", "h", "sjob", "1", "status"): (
+        ("ssh", "--", "h", "sjob", "1", "status"): (
             "JobID|JobName|State|Elapsed|Start|End|Timelimit|ExitCode\n"
             "1|t|RUNNING|00:01:00|x|y|01:00:00|0:0\n"
         ),
-        ("ssh", "h", "sjob", "1", "when"): "end=later\n",
+        ("ssh", "--", "h", "sjob", "1", "when"): "end=later\n",
         ("wbcheck",): "state=running\n",
     }
     with mock.patch.object(collect.subprocess, "run", side_effect=_stub_run(cmds)):
@@ -230,3 +231,41 @@ def test_sjob_rejects_non_numeric_job_id():
     """_sjob must raise ValueError for non-digit job_id (H4)."""
     with pytest.raises(ValueError, match="job_id must be digits"):
         collect._sjob("12; rm -rf /", "status", "host.example")
+
+
+# ---------------------------------------------------------------------------
+# H-new: hostname option injection prevention
+# ---------------------------------------------------------------------------
+
+def test_sjob_rejects_hostname_starting_with_dash():
+    """_sjob raises ValueError for an ssh_host beginning with '-' (H-new).
+
+    A hostname like '-oProxyCommand=...' would be interpreted by ssh as an
+    option flag, enabling arbitrary command execution on the local machine.
+    """
+    with pytest.raises(ValueError, match="ssh_host"):
+        collect._sjob("12345", "status", "-oProxyCommand=foo")
+
+
+def test_sjob_uses_double_dash_separator_in_ssh_cmd():
+    """_sjob includes '--' between ssh and the hostname (H-new).
+
+    This prevents a hostname that starts with '-' from being silently accepted
+    by ssh as an option if validation is bypassed by a future refactor.
+    """
+    called_with: list[list[str]] = []
+
+    def recording_run(args, *a, **kw):
+        called_with.append(list(args))
+        import subprocess
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    with mock.patch.object(collect.subprocess, "run", side_effect=recording_run):
+        collect._sjob("12345", "status", "login.example")
+
+    assert called_with, "expected _run to be called"
+    cmd = called_with[0]
+    assert cmd[0] == "ssh"
+    assert "--" in cmd
+    dash_dash_idx = cmd.index("--")
+    assert cmd[dash_dash_idx + 1] == "login.example"
