@@ -71,26 +71,69 @@ When a metric key is not found, try all variants before concluding the metric is
 | Gradients > 10 | Critical | Exploding gradients |
 | Gradients > 5 | Warning | Spiky gradients |
 | Gradients < 0.0001 | Warning | Vanishing gradients |
-| Heartbeat > 30min stale | Critical | Job likely stalled or crashed |
-| Heartbeat > 10min stale | Warning | Possibly stuck, investigate |
+| Heartbeat stale > K × baseline (see below) | Critical | Job likely stalled or crashed |
 | Run state = `crashed` | Critical | Job crashed, check logs |
 | Run state = `failed` | Critical | Job failed, check exit code |
 
+The two old fixed-time heartbeat rows (`> 10 min` warning, `> 30 min` critical)
+are replaced by the adaptive formula in the next section.
+
 ## Heartbeat-Based Stall Detection
 
-W&B heartbeat is more reliable than log file timestamps for detecting stalls, because it updates independently of training step logging.
+Real-world inter-beat intervals vary by job type — a fast LLM step pushes
+metrics every ~15 s, an RL rollout might be quiet for ~5 min between syncs.
+Fixed wallclock thresholds either fire too late on fast jobs or too early on
+slow ones. Use an **adaptive multiplier against the run's own observed
+baseline**.
 
-- `run.heartbeat_at` gives last heartbeat timestamp.
-- Compare against current time to get staleness.
-- Heartbeat > 10min stale while process appears alive via `ps`: investigate.
-- Heartbeat > 30min stale: treat as confirmed stall regardless of process status.
+### Formula
 
-### False Positives
+```
+baseline = median inter-beat interval over the last N=50 history rows
+          (with a 30 s floor; if the run has fewer than ~5 rows, use 30 s)
+gap_now  = now - heartbeat_at
+warmup   = 5 min — skip the check entirely during a run's first 5 min,
+           since W&B sync warm-up is genuinely slow on some clusters
+verdict  = STALE iff (run age > warmup) AND (gap_now > K * baseline)
+```
 
-Heartbeat staleness does NOT always mean the job is stuck:
-- **Checkpoint save**: large checkpoints can block the main thread for minutes. Check if disk I/O is active.
-- **W&B offline mode**: if the network is down, heartbeat stops updating but training continues. Check log file timestamps as a backup.
-- **Rate limiting**: W&B API may be throttled. Check `wandb/latest-run/logs/` for sync errors.
+The script `scripts/heartbeat_baseline.py` computes this. Call it with:
+
+```bash
+"${CLAUDE_SKILL_ROOT}/scripts/heartbeat_baseline.py" \
+  --run-id "<wandb_run_id>" --entity "<entity>" --project "<project>" \
+  --aggressiveness "<paranoid|conservative|balanced|aggressive>"
+```
+
+It prints one of `OK`, `STALE`, `WARMUP`, or `INSUFFICIENT_HISTORY` and exits
+with rc=0 (OK/WARMUP/INSUFFICIENT_HISTORY) or rc=1 (STALE).
+
+### Multiplier table
+
+| Aggressiveness | K | Effective trigger on a baseline-60s run |
+|---|---|---|
+| `paranoid` | ∞ (never auto-cancel; verdict will always say OK as long as `gap_now < ∞`) | n/a |
+| `conservative` | 20 | 20 min |
+| `balanced` | 10 | 10 min |
+| `aggressive` | 5 | 5 min |
+
+(For a baseline-15s run, those become 5 / 2.5 / 1.25 min respectively; for a
+baseline-300s run, they become 100 / 50 / 25 min.)
+
+### Quiet-by-design exception
+
+Some training phases (eval pass, checkpoint save, dataloader epoch boundary)
+are quiet by design. When `phases/1-predict.md`'s prediction template includes
+`expected_phase ∈ {eval, checkpoint, ...}` AND the predicted phase duration is
+not yet exceeded, the heartbeat check is **suspended** for the remainder of
+the predicted phase — verdict returns `EXPECTED_QUIET` and the supervisor
+does not treat it as STALE.
+
+### Recommended Phase 2 wiring
+
+Have the wandb-monitor collector call `heartbeat_baseline.py` for every
+running W&B run in scope. Treat its verdict as one signal among many in the
+Phase 3 evidence bundle; never let it alone trigger STOP.
 
 ## W&B Cross-Source Validation
 
