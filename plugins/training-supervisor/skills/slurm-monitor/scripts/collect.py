@@ -216,7 +216,7 @@ def collect(
     # Normalise empty string to None (local mode).
     ssh_host = ssh_host or None
 
-    rc_status, status_out, _ = _sjob(job_id, "status", ssh_host)
+    rc_status, status_out, status_err = _sjob(job_id, "status", ssh_host)
     rc_when, when_out, _ = _sjob(job_id, "when", ssh_host)
     ssh_reachable = rc_status == 0
     rc_wb, wb_out, _ = _wbcheck(wandb_run, ref_run, epochs)
@@ -241,6 +241,9 @@ def collect(
     lines.append(f"- elapsed: {elapsed}")
     lines.append(f"- timelimit: {timelimit}")
     lines.append(f"- reachable: {'true' if ssh_reachable else 'false'}")
+    if rc_status != 0 and status_err:
+        # Surface first line of stderr so the operator can see why sjob failed.
+        lines.append(f"> error: {_fence_safe(status_err.strip()).splitlines()[0]}")
     lines.append("")
 
     lines.append("## progress")

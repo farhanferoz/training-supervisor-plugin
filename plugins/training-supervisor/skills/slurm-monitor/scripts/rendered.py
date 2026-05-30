@@ -179,7 +179,10 @@ def _check_requires(req: list[str], env: dict[str, Any]) -> bool:
                     rhs = float(rhs_s)
                 except ValueError:
                     rhs = env.get(rhs_s)
-                if lhs is None or not op(float(lhs), float(rhs)):
+                # Guard: if either operand is None the condition cannot be satisfied.
+                if lhs is None or rhs is None:
+                    return False
+                if not op(float(lhs), float(rhs)):
                     return False
                 break
         else:

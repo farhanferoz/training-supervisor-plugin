@@ -247,3 +247,18 @@ def test_safe_eval_rejects_string_arithmetic():
     # "AAA" * 2 would silently produce "AAAAAA" — guard catches it as TypeError or size.
     with pytest.raises(ValueError):
         rendered._safe_eval('x * 2', {"x": "AAA" * 2000})
+
+
+# ---------------------------------------------------------------------------
+# Residual MEDs: _check_requires None guard + registry version warning
+# ---------------------------------------------------------------------------
+
+def test_check_requires_returns_false_when_env_missing():
+    """_check_requires returns False when the rhs env var is missing (None guard)."""
+    # "batch_size >= unknown" — 'unknown' is not in env, so rhs=None → False.
+    assert not rendered._check_requires(["batch_size >= unknown"], {"batch_size": 4})
+
+
+def test_check_requires_returns_false_when_lhs_missing():
+    """_check_requires returns False when the lhs env var is missing (None guard)."""
+    assert not rendered._check_requires(["missing_key >= 0"], {})

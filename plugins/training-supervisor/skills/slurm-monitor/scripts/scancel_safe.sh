@@ -19,12 +19,15 @@ Required:
 Optional:
   --reason-class C   One of: loss_nan, nccl_hang, crashed, stagnant, other.
                      Required when LEVEL=conservative. Defaults to "other".
+  --session-ts TS    Session timestamp (ISO compact, e.g. 20260530T120000Z).
+                     If provided, logs into an existing sessions/<ts>/ dir.
+                     If absent, a new timestamp is created (preserves old behaviour).
   --state-dir DIR    Defaults to \$TRAINING_SUPERVISOR_STATE_DIR or ~/.claude-job-monitor.
   --dry-run          Print the command that would run; do not execute.
 EOF
 }
 
-JOB_ID="" SSH_HOST="" REASON="" AUTHORITY="" REASON_CLASS="other"
+JOB_ID="" SSH_HOST="" REASON="" AUTHORITY="" REASON_CLASS="other" SESSION_TS=""
 STATE_DIR="${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}"
 DRY_RUN=0
 while [[ $# -gt 0 ]]; do
@@ -34,6 +37,7 @@ while [[ $# -gt 0 ]]; do
         --reason) REASON="$2"; shift 2 ;;
         --authority) AUTHORITY="$2"; shift 2 ;;
         --reason-class) REASON_CLASS="$2"; shift 2 ;;
+        --session-ts) SESSION_TS="$2"; shift 2 ;;
         --state-dir) STATE_DIR="$2"; shift 2 ;;
         --dry-run) DRY_RUN=1; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -70,7 +74,10 @@ case "$AUTHORITY" in
     *) echo "scancel_safe: unknown authority '$AUTHORITY'" >&2; exit 2 ;;
 esac
 
-ts="$(date -u +%Y%m%dT%H%M%SZ)"
+umask 077  # state dir + gate logs only readable by owner
+
+# Use caller-supplied session timestamp if given; otherwise create a new one.
+ts="${SESSION_TS:-$(date -u +%Y%m%dT%H%M%SZ)}"
 log_dir="$STATE_DIR/sessions/$ts"
 mkdir -p "$log_dir"
 log_path="$log_dir/5-act.md"

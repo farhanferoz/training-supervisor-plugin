@@ -20,6 +20,7 @@ if [[ "$uptime_s" -lt 60 ]]; then
     exit 0
 fi
 
+umask 077  # session logs only readable by owner
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
 out_dir="$STATE_DIR/sessions/$ts"
 mkdir -p "$out_dir"

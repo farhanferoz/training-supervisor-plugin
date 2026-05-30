@@ -65,6 +65,14 @@ comes from the per-job state's `policy.authority` field; if absent, default
 to `conservative`. The script logs every invocation (including refused ones)
 into the Phase 5 gate log.
 
+Pass `--session-ts <current_session_ts>` so the script appends into the
+existing session directory rather than creating a new timestamp.
+
+**Exit code 3 (REFUSED):** If `scancel_safe.sh` exits 3, the job has NOT
+been cancelled. Surface the refusal and stop reason to the user via
+AskUserQuestion — do not silently continue. The operator must intervene
+manually to stop the job.
+
 **After `scancel_safe.sh` succeeds AND slurm-monitor is active**, chain
 `scripts/relaunch_with_fix.sh` with the same `--authority` and the failure
 class from Phase 3. The script writes a `next_action.sh` proposal. Under

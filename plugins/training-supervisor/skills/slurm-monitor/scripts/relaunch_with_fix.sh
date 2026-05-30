@@ -69,6 +69,7 @@ REGISTRY="${REGISTRY:-${JOB_MONITOR_FIX_REGISTRY:-$(dirname "$0")/../fixes/regis
 STATE_DIR="${STATE_DIR:-${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}}"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+umask 077  # state dir + gate logs only readable by owner
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
 log_dir="$STATE_DIR/sessions/$ts"
 mkdir -p "$log_dir"
