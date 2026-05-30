@@ -1,0 +1,43 @@
+# version: 1
+# Default known-fixes registry. Project-specific Hydra paths are autocast-
+# flavoured (datamodule.batch_size, +trainer.accumulate_grad_batches,
+# optimizer.min_lr_ratio). Users on other stacks copy this file, edit the
+# hydra_overrides templates, and point at it via JOB_MONITOR_FIX_REGISTRY.
+
+fixes:
+  oom:
+    - id: oom_halve_batch
+      description: "Halve datamodule.batch_size and double accumulate_grad_batches to preserve effective batch."
+      risk: safe
+      requires:
+        - "batch_size >= 2"
+      hydra_overrides:
+        - "datamodule.batch_size={{ batch_size // 2 }}"
+        - "+trainer.accumulate_grad_batches={{ accumulate * 2 if accumulate else 2 }}"
+
+  nccl_timeout:
+    - id: nccl_resubmit
+      description: "Resubmit with same config. Most NCCL timeouts are transient (node flake or upstream comms blip)."
+      risk: safe
+      hydra_overrides: []
+
+  crashed:
+    - id: crashed_resubmit
+      description: "Resubmit with same config. SLURM-FAIL after fit (#381 class) is typically transient."
+      risk: safe
+      hydra_overrides: []
+
+  loss_nan:
+    - id: loss_nan_escalate
+      description: "Loss diverged. Cannot be auto-fixed reliably — could be bad init, LR, data, mixed precision overflow. Escalate to user."
+      risk: escalate
+      hydra_overrides: []
+
+  stagnant:
+    - id: stagnant_raise_lr_floor
+      description: "Loss flat through the last N epochs; raise the cosine LR floor so the schedule doesn't anneal to 0 mid-descent."
+      risk: proposed
+      requires:
+        - "current_min_lr_ratio < 0.1"
+      hydra_overrides:
+        - "optimizer.min_lr_ratio=0.1"

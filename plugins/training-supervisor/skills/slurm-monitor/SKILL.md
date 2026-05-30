@@ -110,12 +110,42 @@ config — `slurm-monitor` does not bake numbers in.
 Before relaunching after a STOP, the supervisor:
 
 1. Computes a failure fingerprint:
-   `sha256(experiment_name + resolved_config_hash + failure_class)`.
-2. Reads `${STATE_DIR}/jobs/<job-id>.json` → `strategy.relaunch_attempts[fingerprint]`.
-3. If `attempts >= anti_loop_cap[authority]`, REFUSES to relaunch; raises a
+   `sha256(experiment_name + failure_class + fix_id)`. The fix_id comes from
+   the Phase 5 fix-registry lookup (or "_no_fix" if STOP without auto-fix).
+   This means: applying a *different* fix for the same failure class starts
+   a fresh counter for that (failure_class, fix_id) pair; applying the same
+   fix twice does not.
+2. Also maintains an aggregate counter
+   `aggregate_attempts[experiment_name + failure_class]` (no fix_id) so that
+   a registry with multiple fixes per failure class cannot cycle through
+   them indefinitely. Cap = `2 × anti_loop_cap[authority]` (e.g., balanced
+   = 4 aggregate attempts max across all fixes for that failure class).
+   When the aggregate cap is hit, the supervisor refuses any further fix
+   attempt for that (experiment, failure_class) until the user resets the
+   counter (delete the entry from `${STATE_DIR}/jobs/<job-id>.json` or call
+   `scripts/reset_counter.sh`).
+3. Reads `${STATE_DIR}/jobs/<job-id>.json` → `strategy.relaunch_attempts[fingerprint]`.
+4. If `attempts >= anti_loop_cap[authority]`, REFUSES to relaunch; raises a
    "two failed retries with the same config + failure mode" notice and stops.
-4. Otherwise increments the counter, records the new launch, persists.
+5. Otherwise increments the counter, records the new launch, persists.
 
 Persistence write is the supervisor's responsibility (Phase 6), not this
 skill's. The skill returns the fingerprint and a recommended next-step
 descriptor; the orchestrator decides whether to honour it.
+
+## Known-Fixes Registry (Phase 5 follow-on)
+
+After a successful STOP (via `scancel_safe.sh`), the orchestrator consults
+`fixes/registry.yaml` and runs `scripts/relaunch_with_fix.sh` if the
+failure class has an applicable fix.
+
+The registry maps `failure_class -> [fix, ...]`. Each fix has a `risk`:
+- `safe` — autonomous under `aggressive`; proposed under `balanced`.
+- `proposed` — never autonomous; proposed under `balanced`/`aggressive`.
+- `escalate` — always surfaces to the user, never auto-applied.
+
+See `fixes/README.md` for the schema and the template substitution rules.
+The default registry targets autocast (Hydra paths
+`datamodule.batch_size`, `+trainer.accumulate_grad_batches`,
+`optimizer.min_lr_ratio`); override via `JOB_MONITOR_FIX_REGISTRY` to use
+your own paths.
