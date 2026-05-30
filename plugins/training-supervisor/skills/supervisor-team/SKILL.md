@@ -87,6 +87,18 @@ all in one call):
      unrelated. The monitoring cycle is silently dropped. Best when you want
      a clean separation and prefer to miss a check rather than mix contexts.
 
+6. **Scheduler**: How should the periodic loop be driven?
+   - **Cloud (CronCreate)** — Claude Code's hosted scheduled remote agents
+     (default upstream path). Best when the monitoring environment has no
+     filesystem-local state to reach (e.g., everything goes through the W&B
+     API and no SSH is needed).
+   - **Local cron / systemd-user timer** — A real cron entry on the user's
+     machine invoking `claude --print` with a baked prompt. Required when
+     the monitoring loop needs filesystem-local credentials the cloud agent
+     does not have (SSH certs, kubectl context, VPN-only services). The
+     loop is skipped while the laptop is asleep — missed cycles are not
+     retroactively fired.
+
 ### Step 2: Generate cron prompt from preferences
 
 Build the teammate instructions based on the user's answers. The prompt MUST
@@ -121,7 +133,11 @@ GPU / Process / Log collectors and spawn one slurm-monitor collector instead
 (see `phases/2-collect.md` → "When `slurm-monitor` is active"). The
 `Resource Collector` may still run if a local checkpoint mirror is configured.
 
-### Step 3: Set up cron
+### Step 3: Set up the scheduler
+
+Branch on the user's Q6 answer.
+
+#### 3a. If Q6 = Cloud (CronCreate)
 
 Use **CronCreate** to schedule a recurring job at the user's requested frequency
 (from Q3). Pick an off-round minute (e.g., :23, :47) to avoid API contention.
@@ -154,6 +170,40 @@ mode: dontAsk, run_in_background: true) with these instructions:
 [teammate instructions from Step 2]
 
 When the teammate completes, send it a shutdown request via SendMessage.
+```
+
+(See the original upstream procedure for full CronCreate details.)
+
+#### 3b. If Q6 = Local cron / systemd-user timer
+
+Run the helper:
+
+```bash
+"${CLAUDE_SKILL_ROOT}/scripts/install_local_cron.sh" \
+  --frequency "<Q3 value, e.g. 30m, 1h>" \
+  --prompt-file "${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/cron_prompt.txt"
+```
+
+The helper:
+1. Writes the Step-2 teammate-instruction template to `cron_prompt.txt`.
+2. Installs a `crontab -e` entry (or `systemd --user` timer if available) that
+   runs `cron_dispatch.sh` at the requested interval.
+3. Verifies the entry was installed (`crontab -l` / `systemctl --user list-timers`).
+
+`cron_dispatch.sh`:
+- Invokes `CCAGE_DISABLE=1 claude --print < cron_prompt.txt`.
+- Captures stdout to `${STATE_DIR}/sessions/<ts>/cron_output.log`.
+- Sends a `SendMessage`-style shutdown signal not applicable in local mode —
+  the `claude --print` subprocess exits after one pass, so no lifecycle
+  management is needed.
+- Skips its execution silently if the laptop just woke up
+  (`uptime | awk '{ print $3 }'` < 60 s) — missed cycles are not retroactively
+  fired.
+
+To remove the loop:
+
+```bash
+"${CLAUDE_SKILL_ROOT}/scripts/uninstall_local_cron.sh"
 ```
 
 ### Step 4: Trigger first cycle immediately
