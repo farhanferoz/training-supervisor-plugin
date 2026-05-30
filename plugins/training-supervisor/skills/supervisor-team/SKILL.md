@@ -116,6 +116,11 @@ include all of the following:
 > complete one monitoring pass, handle any issues you find, then exit. Do not
 > loop, do not wait for the next cycle, do not persist. When done, exit.
 
+**If `slurm-monitor` is in the active domain-skill set**: SKIP the default
+GPU / Process / Log collectors and spawn one slurm-monitor collector instead
+(see `phases/2-collect.md` → "When `slurm-monitor` is active"). The
+`Resource Collector` may still run if a local checkpoint mirror is configured.
+
 ### Step 3: Set up cron
 
 Use **CronCreate** to schedule a recurring job at the user's requested frequency

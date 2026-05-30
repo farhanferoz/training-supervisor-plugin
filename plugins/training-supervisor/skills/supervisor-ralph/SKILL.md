@@ -68,6 +68,11 @@ The cron prompt tells you (main agent) what to do each cycle. It should contain:
 3. Authority level from Q4.
 4. `DISPATCH_MODE: ralph` and a reminder to use the /training-supervisor skill.
 
+**If `slurm-monitor` is in the active domain-skill set**: SKIP the default
+GPU / Process / Log collectors and spawn one slurm-monitor collector instead
+(see `phases/2-collect.md` → "When `slurm-monitor` is active"). The
+`Resource Collector` may still run if a local checkpoint mirror is configured.
+
 Example cron prompt:
 ```
 You are monitoring [target from Q1].

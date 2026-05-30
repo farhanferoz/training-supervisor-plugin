@@ -26,6 +26,7 @@ Determine which entries in the Dependency Registry below apply to the user's sit
 |--------|------------------|-------------|
 | RL/GRPO/PPO keywords in config or code | GRPO/RL training → need `grpo-monitor` | `grep -ri "grpo\|ppo\|rloo\|reward\|kl_loss" <project_dir>` |
 | Multiple GPU processes or torchrun/deepspeed in command | Distributed training → need `distributed-monitor` | `ps aux \| grep -E "torchrun\|deepspeed\|accelerate"`, `nvidia-smi` showing multiple GPUs used |
+| sbatch / salloc / squeue in shell history, slurm_scripts/ in repo, sacct on PATH | SLURM-scheduled training → need `slurm-monitor` | `command -v sbatch sacct squeue >/dev/null 2>&1`, `ls slurm_scripts/ *.sbatch 2>/dev/null` |
 | K8s YAML files, kubectl available, namespace references | Kubernetes infra → need `k8s-monitor` | `ls *.yaml *k8s* 2>/dev/null`, `kubectl version --client 2>/dev/null` |
 | wandb imported in code, wandb dir exists, WANDB_API_KEY set | W&B tracking → need `wandb-monitor` | `grep -ri "import wandb\|wandb.init" <project_dir>`, `ls wandb/ 2>/dev/null`, `echo $WANDB_API_KEY` |
 | tensorboard logs, SummaryWriter in code | TensorBoard tracking (no dedicated skill yet) | `grep -ri "SummaryWriter\|tensorboard" <project_dir>`, `ls runs/ tb_logs/ 2>/dev/null` |
@@ -39,6 +40,7 @@ This is the complete list of domain skills and their external dependencies. The 
 | `training-supervisor` | Core monitoring orchestrator | `nvidia-smi` | (pre-installed on GPU machines) |
 | `grpo-monitor` | RL metrics, generation quality, phase time | none | — |
 | `distributed-monitor` | NCCL diagnostics, process hierarchy, stragglers | none | — |
+| `slurm-monitor` | SLURM job state + remote-cluster STOP path | `ssh` to the cluster login host; `~/bin/sjob` and `~/bin/wbcheck` (or equivalents) | (user-installed) |
 | `k8s-monitor` | Pod anomalies, scheduling escalation | `kubectl` with cluster access | `curl -LO https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x kubectl && mv kubectl ~/.local/bin/` |
 | `wandb-monitor` | Heartbeat stall detection, metric keys, health thresholds | `wandb-primary` skill + `wandb` Python package + authentication | `npx skills add wandb/skills` then `pip install wandb` then `wandb login` |
 

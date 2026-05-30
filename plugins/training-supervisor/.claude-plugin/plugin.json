@@ -1,6 +1,6 @@
 {
   "name": "training-supervisor",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Qualitative-first autonomous supervision for ML/DL training jobs. Makes holistic human-like judgments about whether to continue or stop training, with fresh-context evaluation to prevent bias.",
   "author": {
     "name": "peijia"

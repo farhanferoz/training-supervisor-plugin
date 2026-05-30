@@ -57,6 +57,14 @@ The monitor has authority to stop training. Execute:
 3. **Record**: Write the stop reason, the last good checkpoint, and the qualitative assessment to the gate log.
 4. **Next steps**: If the Phase 3 sub-agent indicated uncertainty about what to do AFTER stopping (restart with different config? try different approach?), present options to the user via AskUserQuestion. The question is "what should we do next?" -- NOT "should we have stopped?"
 
+**When `slurm-monitor` is active**, "Kill: stop the training process" means
+calling `${CLAUDE_SKILL_ROOT}/scripts/scancel_safe.sh` with the configured
+authority level. That script refuses to act under `paranoid` and restricts
+the allowed `reason_class` set under `conservative`. The authority level
+comes from the per-job state's `policy.authority` field; if absent, default
+to `conservative`. The script logs every invocation (including refused ones)
+into the Phase 5 gate log.
+
 ### If CONTINUE
 
 Lightweight response:

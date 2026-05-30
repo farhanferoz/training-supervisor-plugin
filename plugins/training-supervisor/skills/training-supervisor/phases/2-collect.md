@@ -96,6 +96,22 @@ The main agent merges all collector outputs into a single evidence bundle. This 
 - For K8s jobs, load the `k8s-monitor` skill for kubectl-based collection.
 - For W&B integration, the `wandb-primary` skill from `wandb/skills` is required. Use `supervisor-doctor` to verify.
 
+## When `slurm-monitor` is active (remote SLURM training)
+
+If the active domain-skill set includes `slurm-monitor`, the default GPU /
+Process / Log collectors have nothing to collect (training is remote, no local
+PID, no local nvidia-smi). Replace them with one `slurm-monitor` collector:
+
+```
+Agent(prompt: "Collect SLURM + W&B evidence. Run
+  ${CLAUDE_SKILL_ROOT}/scripts/collect.py with the job_id, wandb_run, ref_run,
+  and ssh_host from the per-job state. Return the script's stdout verbatim.")
+```
+
+`wandb-monitor` heuristics still apply for interpreting the W&B trajectory
+bundle the script emits. `k8s-monitor` is mutually exclusive with
+`slurm-monitor`; doctor will not enable both.
+
 ## Gate Log Format
 
 Record in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/2-collect.md`:
