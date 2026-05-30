@@ -1,5 +1,5 @@
 {
-  "_comment": "Merge these blocks into your ~/.claude/settings.json (or .claude/settings.json) to let the training-supervisor cron loop run unattended. Replace <SSH_HOST> with your cluster login host (e.g. u6eo.aip2.isambard). Replace ~/bin paths if your helpers live elsewhere.",
+  "_comment": "Merge these blocks into your ~/.claude/settings.json (or .claude/settings.json) to let the training-supervisor cron loop run unattended. Replace <SSH_HOST> with your cluster login host (e.g. u6eo.aip2.isambard). Replace ~/bin paths if your helpers live elsewhere. The training-supervisor skill paths use '*' globs — Claude Code matches these against resolved absolute paths, so no shell expansion is needed.",
   "permissions": {
     "allow": [
       "Bash(~/bin/wbcheck:*)",
@@ -7,9 +7,9 @@
       "Bash(ssh <SSH_HOST>:*)",
       "Read(~/.claude-job-monitor/**)",
       "Write(~/.claude-job-monitor/**)",
-      "Read(${CLAUDE_SKILL_ROOT}/**)",
-      "Bash(${CLAUDE_SKILL_ROOT}/scripts/*.py:*)",
-      "Bash(${CLAUDE_SKILL_ROOT}/scripts/*.sh:*)"
+      "Read(*/training-supervisor/skills/**)",
+      "Bash(*/training-supervisor/skills/*/scripts/*.py:*)",
+      "Bash(*/training-supervisor/skills/*/scripts/*.sh:*)"
     ]
   }
 }

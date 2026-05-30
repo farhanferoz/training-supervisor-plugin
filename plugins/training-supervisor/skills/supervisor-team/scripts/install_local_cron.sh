@@ -21,10 +21,40 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 DISPATCH="$HERE/cron_dispatch.sh"
 chmod +x "$DISPATCH"
 
+# Validate PROMPT_FILE path: no whitespace or newlines.
+# A path with embedded whitespace or newlines would break the systemd
+# ExecStart= line and the crontab entry without proper quoting.
+if [[ "$PROMPT_FILE" == *$'\n'* || "$PROMPT_FILE" == *' '* || "$PROMPT_FILE" == *$'\t'* ]]; then
+    echo "PROMPT_FILE path must not contain whitespace or newlines (got: ${PROMPT_FILE@Q})" >&2
+    exit 2
+fi
+
 # Translate user-friendly frequency to cron syntax.
+# Validated regex guards prevent injection via the FREQUENCY string.
 case "$FREQUENCY" in
-    *m) mins="${FREQUENCY%m}";    spec="*/$mins * * * *" ;;
-    *h) hours="${FREQUENCY%h}";   spec="0 */$hours * * *" ;;
+    *m)
+        mins="${FREQUENCY%m}"
+        [[ "$mins" =~ ^[1-9][0-9]*$ ]] || {
+            echo "frequency minute value must be a positive integer (got '$mins')" >&2; exit 2
+        }
+        if (( mins < 60 )); then
+            spec="*/$mins * * * *"
+        elif (( mins == 60 )); then
+            spec="0 * * * *"
+        else
+            echo "for intervals >= 60m, use the Nh form (e.g., '1h', '2h')" >&2; exit 2
+        fi
+        ;;
+    *h)
+        hours="${FREQUENCY%h}"
+        [[ "$hours" =~ ^[1-9][0-9]*$ ]] || {
+            echo "frequency hour value must be a positive integer (got '$hours')" >&2; exit 2
+        }
+        (( hours <= 23 )) || {
+            echo "for intervals > 23h, use a daily cron spec manually" >&2; exit 2
+        }
+        spec="0 */$hours * * *"
+        ;;
     *)  echo "unsupported frequency '$FREQUENCY' (use Nm or Nh)" >&2; exit 2 ;;
 esac
 
@@ -40,7 +70,7 @@ Description=training-supervisor-team one-shot dispatch
 After=network-online.target
 [Service]
 Type=oneshot
-ExecStart=$DISPATCH $PROMPT_FILE
+ExecStart="$DISPATCH" "$PROMPT_FILE"
 EOF
     cat >"$UNIT_DIR/training-supervisor-team.timer" <<EOF
 [Unit]

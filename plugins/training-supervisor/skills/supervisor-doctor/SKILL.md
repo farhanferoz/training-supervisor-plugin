@@ -133,12 +133,17 @@ permissions template so the cron loop's `claude --print` invocation isn't
 blocked by per-call approval prompts:
 
 ```
-${CLAUDE_SKILL_ROOT}/templates/permissions.snippet.json
+plugins/training-supervisor/templates/permissions.snippet.json
 ```
 
 The template's `permissions.allow` entries should be merged into the user's
-`~/.claude/settings.json`. Replace `<SSH_HOST>` with the cluster login host
-from supervisor-doctor's environment detection.
+`~/.claude/settings.json`.  Two substitutions are required:
+
+- Replace `<SSH_HOST>` with the cluster login host from supervisor-doctor's
+  environment detection (e.g. `u6eo.aip2.isambard`).
+- The skill-path entries use `*/training-supervisor/skills/...` glob patterns
+  that match the plugin's resolved absolute path without any shell expansion.
+  No further substitution is needed for those entries.
 
 Recommend running the `fewer-permission-prompts` skill once the loop has been
 running for a session, to catch any additional read-only operations the
