@@ -10,7 +10,7 @@ Before writing any contract, establish WHAT we are supervising.
 
 ### Subsequent sessions (per-job state exists)
 
-Read job targets from `monitoring-logs/jobs/<job-id>.json`:
+Read job targets from `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/<job-id>.json`:
 - PID, log path, config path, checkpoint dir
 - Verify targets are still valid:
   ```bash
@@ -106,7 +106,7 @@ If no per-job state exists:
 
 ## Gate Log Format
 
-Record in `monitoring-logs/<timestamp>/0-contract.md`:
+Record in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/0-contract.md`:
 
 ```
 CONTRACT: [job name] -- [session timestamp]

@@ -40,7 +40,7 @@ Do NOT write pitfalls to disk in this phase. Collect them and pass to Phase 6 (P
 
 ## Gate Log Format
 
-Record in `monitoring-logs/<timestamp>/4-audit.md`:
+Record in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/4-audit.md`:
 - Reviewer's verdict (APPROVED / REJECTED)
 - Contract compliance check results
 - What was spot-checked and the result

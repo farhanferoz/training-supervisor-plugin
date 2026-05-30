@@ -98,7 +98,7 @@ These are worth noting in your description even if the key metric looks fine.
 
 ## Gate Log Format
 
-Record in `monitoring-logs/<timestamp>/3-analyze.md`:
+Record in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/3-analyze.md`:
 
 ### Comparison
 - Prediction vs actual (from Phase 1)

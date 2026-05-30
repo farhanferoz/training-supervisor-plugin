@@ -98,7 +98,7 @@ The main agent merges all collector outputs into a single evidence bundle. This 
 
 ## Gate Log Format
 
-Record in `monitoring-logs/<timestamp>/2-collect.md`:
+Record in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/2-collect.md`:
 - The merged evidence bundle (all collector outputs)
 - Which collectors ran and their status (success/failure)
 - Any collection failures (command errors, timeouts)

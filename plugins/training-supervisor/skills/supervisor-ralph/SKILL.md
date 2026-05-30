@@ -76,7 +76,7 @@ You are monitoring [target from Q1].
 
 DISPATCH_MODE: ralph
 Use the /training-supervisor skill to execute one complete monitoring pass.
-All cross-session state is in monitoring-logs/jobs/ -- read it first.
+All cross-session state is in ${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/ -- read it first.
 When the pass is complete, stop and wait for the next cron trigger.
 ```
 
@@ -107,7 +107,7 @@ into a recovery-oriented summary (handled by the PreCompact hook).
 
 The monitoring loop is:
 ```
-cron fires -> read job state from monitoring-logs/jobs/ -> run /training-supervisor
+cron fires -> read job state from ${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/ -> run /training-supervisor
 -> gate logs written at each step -> pass completes -> wait for next cron
 -> auto-compact fires (between passes) -> summary preserves recovery context
 -> next cron fires -> read summary + job state -> run /training-supervisor -> ...
@@ -115,7 +115,7 @@ cron fires -> read job state from monitoring-logs/jobs/ -> run /training-supervi
 
 If auto-compact fires mid-pass (because the pass exceeded the window):
 1. The PreCompact hook ensures the summary preserves which step you were on.
-2. After compaction, read the gate logs (monitoring-logs/<timestamp>/) to see
+2. After compaction, read the gate logs (${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/) to see
    which steps completed.
 3. Check the task list to find in-progress tasks.
 4. Resume from where you left off.
@@ -125,7 +125,7 @@ If auto-compact fires mid-pass (because the pass exceeded the window):
 After any compaction, before continuing work:
 
 1. Read the compact summary (it is your only context).
-2. Read the per-job state file (monitoring-logs/jobs/<job-id>.json).
-3. List the current session's gate logs (monitoring-logs/<timestamp>/).
+2. Read the per-job state file (${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/<job-id>.json).
+3. List the current session's gate logs (${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/).
 4. Check the task list for in-progress tasks.
 5. Resume the monitoring procedure from the appropriate step.

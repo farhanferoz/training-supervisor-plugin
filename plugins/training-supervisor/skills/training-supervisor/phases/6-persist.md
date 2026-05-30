@@ -6,7 +6,7 @@ Write all session results to persistent storage. This is the final phase -- afte
 
 ## Per-Job State (Tiered)
 
-Update `monitoring-logs/jobs/<job-id>.json` using the tiered structure:
+Update `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/<job-id>.json` using the tiered structure:
 
 ```json
 {
@@ -105,7 +105,7 @@ Write pitfalls collected from the Phase 4 reviewer:
 
 ### Global pitfalls
 
-Append to `monitoring-logs/pitfalls.md` (create if doesn't exist). One line per pitfall, prefixed with session timestamp. Before appending, check for semantic duplicates.
+Append to `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/pitfalls.md` (create if doesn't exist). One line per pitfall, prefixed with session timestamp. Before appending, check for semantic duplicates.
 
 ### Job-specific pitfalls
 
@@ -113,7 +113,7 @@ Append to `tier2_interpretations.learnings` in per-job state.
 
 ## Summary Gate Log
 
-Record in `monitoring-logs/<timestamp>/6-summary.md`:
+Record in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/6-summary.md`:
 
 ```
 MONITORING SUMMARY: [job name] -- [timestamp]

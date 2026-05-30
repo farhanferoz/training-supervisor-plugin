@@ -171,5 +171,5 @@ Use the **Agent tool** again to create a brand new teammate with `team_name`
 set to your existing team. Do NOT attempt to create a new team -- reuse the
 existing one. If the team was deleted between cycles, create a new one first
 with TeamCreate. Each monitoring cycle is independent. No state is carried in
-context -- cross-session state lives in `monitoring-logs/jobs/*.json` (managed
+context -- cross-session state lives in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/*.json` (managed
 by /training-supervisor inside the teammate).

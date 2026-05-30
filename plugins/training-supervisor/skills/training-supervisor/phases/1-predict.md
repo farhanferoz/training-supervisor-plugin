@@ -40,7 +40,7 @@ The ratio of actual power to TDP gives a rough sense of how hard the GPU is work
 
 ## Gate Log Format
 
-Record in `monitoring-logs/<timestamp>/1-predict.md`:
+Record in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/1-predict.md`:
 - All predictions
 - Basis for each prediction (previous data, config, or first-session reasoning)
 - Contract focus areas addressed

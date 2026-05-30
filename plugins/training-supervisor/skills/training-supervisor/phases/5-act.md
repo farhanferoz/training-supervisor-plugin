@@ -86,7 +86,7 @@ Generate hypotheses only when the situation is genuinely ambiguous and you need 
 
 ## Gate Log Format
 
-Record in `monitoring-logs/<timestamp>/5-act.md`:
+Record in `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/5-act.md`:
 
 ### Troubleshoot (if triggered)
 - Observation, root cause, recommended action, risk, confidence

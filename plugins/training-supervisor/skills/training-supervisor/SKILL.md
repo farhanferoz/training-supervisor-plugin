@@ -46,10 +46,17 @@ All cross-session information is stored in files, not in context.
 
 | Operation | Path |
 |-----------|------|
-| Read previous state | `monitoring-logs/jobs/<job-id>.json` |
-| Write current state | `monitoring-logs/jobs/<job-id>.json` |
-| Session logs | `monitoring-logs/<timestamp>/` |
-| Global pitfalls | `monitoring-logs/pitfalls.md` |
+| Read previous state | `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/<job-id>.json` |
+| Write current state | `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/<job-id>.json` |
+| Session logs | `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/` |
+| Global pitfalls | `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/pitfalls.md` |
+
+The state directory defaults to `~/.claude-job-monitor/` so monitoring state does
+not land inside whatever repository the supervisor is running against. Override
+by exporting `TRAINING_SUPERVISOR_STATE_DIR` before invoking the skill, or by
+adding a `state_dir:` key to the project profile written by `supervisor-doctor`.
+
+Create the directory tree on first write (`mkdir -p`); do not assume it exists.
 
 Job ID = training config path + model path (stable across restarts). PIDs are NOT stable identifiers.
 
@@ -86,14 +93,14 @@ Discover the supervision target, then establish agreement with the reviewer on t
    - If per-job state exists: read job targets (PID, log path, config path, checkpoint dir) from state. Verify targets are still valid (process alive, paths exist).
    - If first session: discover what's running. Use `ps`, `nvidia-smi`, find log/config files. Record discovered targets.
    - Discovery is METADATA (what process, which GPUs, where are logs), not training DATA (metrics, loss values). It does not violate the prediction-first principle.
-2. Read pitfalls: `monitoring-logs/pitfalls.md` (global) and `monitor.learnings` from per-job state (job-specific).
+2. Read pitfalls: `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/pitfalls.md` (global) and `monitor.learnings` from per-job state (job-specific).
 3. Write a contract proposal based on discovered targets + state + pitfalls.
 4. **DISPATCH a reviewer** to review/negotiate the contract. See dispatch file for mechanism. Do NOT skip this — do NOT self-approve your own contract.
 5. Reach agreement. The contract includes the discovered job targets — Phase 2 collectors use these as input.
 
 Reference: [phases/0-contract.md](phases/0-contract.md)
 
-**Gate**: write `monitoring-logs/<timestamp>/0-contract.md`
+**Gate**: write `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/0-contract.md`
 
 TaskUpdate: Phase 0 -> completed
 
@@ -108,7 +115,7 @@ Write predictions **before reading any training evidence** (logs, GPU metrics, d
 
 Reference: [phases/1-predict.md](phases/1-predict.md)
 
-**Gate**: write `monitoring-logs/<timestamp>/1-predict.md`
+**Gate**: write `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/1-predict.md`
 
 TaskUpdate: Phase 1 -> completed
 
@@ -129,7 +136,7 @@ Each collector returns a structured evidence section. You merge their returned r
 
 Reference: [phases/2-collect.md](phases/2-collect.md)
 
-**Gate**: write `monitoring-logs/<timestamp>/2-collect.md`
+**Gate**: write `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/2-collect.md`
 
 TaskUpdate: Phase 2 -> completed
 
@@ -156,7 +163,7 @@ The sub-agent performs qualitative-first judgment:
 
 Reference: [phases/3-analyze.md](phases/3-analyze.md)
 
-**Gate**: write `monitoring-logs/<timestamp>/3-analyze.md`
+**Gate**: write `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/3-analyze.md`
 
 TaskUpdate: Phase 3 -> completed
 
@@ -176,7 +183,7 @@ Reviewer may extract pitfalls (tagged global/job-specific) -- collect these for 
 
 Reference: [phases/4-audit.md](phases/4-audit.md)
 
-**Gate**: write `monitoring-logs/<timestamp>/4-audit.md`
+**Gate**: write `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/4-audit.md`
 
 TaskUpdate: Phase 4 -> completed
 
@@ -198,7 +205,7 @@ Two sub-phases:
 
 Reference: [phases/5-act.md](phases/5-act.md)
 
-**Gate**: write `monitoring-logs/<timestamp>/5-act.md`
+**Gate**: write `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/5-act.md`
 
 TaskUpdate: Phase 5 -> completed
 
@@ -206,19 +213,19 @@ TaskUpdate: Phase 5 -> completed
 
 TaskUpdate: Phase 6 -> in_progress
 
-Update per-job state file (`monitoring-logs/jobs/<job-id>.json`):
+Update per-job state file (`${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/jobs/<job-id>.json`):
 - `meta`: job identifier, last updated timestamp, session count
 - `monitor`: decision history (CONTINUE/STOP), qualitative descriptions, learnings
 - `strategy`: chosen hypothesis, execution plan, success/failure criteria, evaluate_after timestamp
 
 Write pitfalls from Phase 4 reviewer (if any):
-- `[global]` pitfalls: append to `monitoring-logs/pitfalls.md`. One line per pitfall, prefixed with session timestamp.
+- `[global]` pitfalls: append to `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/pitfalls.md`. One line per pitfall, prefixed with session timestamp.
 - `[job-specific]` pitfalls: append to `monitor.learnings` array in per-job state file.
 - Deduplicate: before appending, check if a semantically equivalent pitfall already exists.
 
 Reference: [phases/6-persist.md](phases/6-persist.md)
 
-**Gate**: write `monitoring-logs/<timestamp>/6-summary.md`
+**Gate**: write `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/sessions/<timestamp>/6-summary.md`
 
 TaskUpdate: Phase 6 -> completed
 
