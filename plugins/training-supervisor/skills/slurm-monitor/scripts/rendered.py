@@ -7,16 +7,94 @@ file).
 from __future__ import annotations
 
 import argparse
+import ast
 import operator
 import os
+import shlex
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import yaml
 
 AUTHORITY_AUTONOMOUS = {"aggressive"}
 AUTHORITY_PROPOSE = {"balanced", "aggressive"}
+
+_ALLOWED_RISK_VALUES = {"safe", "proposed", "escalate"}
+
+# Allowed ast node types for the safe expression evaluator.
+_ALLOWED_NODES = (
+    ast.Expression,
+    ast.Constant,    # covers Num + Str in older AST API
+    ast.Name,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.IfExp,
+    ast.Compare,
+    ast.BoolOp,
+)
+
+# Allowed operators for BinOp (no Pow — exponent overflow).
+_ALLOWED_BINOPS = (ast.Add, ast.Sub, ast.Mult, ast.FloorDiv, ast.Mod)
+# Allowed unary operators.
+_ALLOWED_UNARYOPS = (ast.USub,)
+# Allowed compare operators.
+_ALLOWED_COMPAREOPS = (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)
+# Allowed bool operators.
+_ALLOWED_BOOLOPS = (ast.And, ast.Or)
+
+
+def _check_node(node: ast.AST) -> None:
+    """Raise ValueError if *node* contains any disallowed construct."""
+    # AST context/operator singletons (Load, Store, Del, Add, etc.) are
+    # visited as children but are not expression nodes; skip them here —
+    # their parent nodes are checked above for allowed operator types.
+    if isinstance(node, (ast.expr_context, ast.operator, ast.unaryop,
+                         ast.boolop, ast.cmpop)):
+        return
+    if not isinstance(node, _ALLOWED_NODES):
+        msg = f"disallowed expression element {type(node).__name__}"
+        raise ValueError(msg)
+    if isinstance(node, ast.BinOp) and not isinstance(node.op, _ALLOWED_BINOPS):
+        msg = f"disallowed binary operator {type(node.op).__name__}"
+        raise ValueError(msg)
+    if isinstance(node, ast.UnaryOp) and not isinstance(node.op, _ALLOWED_UNARYOPS):
+        msg = f"disallowed unary operator {type(node.op).__name__}"
+        raise ValueError(msg)
+    if isinstance(node, ast.Compare):
+        for op in node.ops:
+            if not isinstance(op, _ALLOWED_COMPAREOPS):
+                msg = f"disallowed compare operator {type(op).__name__}"
+                raise ValueError(msg)
+    if isinstance(node, ast.BoolOp) and not isinstance(node.op, _ALLOWED_BOOLOPS):
+        msg = f"disallowed bool operator {type(node.op).__name__}"
+        raise ValueError(msg)
+    for child in ast.iter_child_nodes(node):
+        _check_node(child)
+
+
+def _safe_eval(expr: str, env: dict[str, Any]) -> Any:
+    """Evaluate *expr* against *env* using a whitelist AST visitor.
+
+    Allowed: constants, name lookups, arithmetic (+/-/*//%), unary minus,
+    ternary IfExp, comparisons (==, !=, <, <=, >, >=), boolean And/Or.
+    Disallowed: everything else (attribute access, subscript, calls, Pow, …).
+    """
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError as exc:
+        msg = f"invalid expression syntax: {expr!r}"
+        raise ValueError(msg) from exc
+    _check_node(tree)
+
+    # eval() against a restricted env with no builtins.
+    # The whitelist visitor above already rejected any dangerous constructs.
+    return eval(  # noqa: S307
+        compile(tree, "<expr>", "eval"),
+        {"__builtins__": {}},
+        env,
+    )
 
 
 @dataclass
@@ -47,14 +125,21 @@ def _config_get(flat: dict[str, Any], *paths: str, default: Any = None) -> Any:
 
 
 def _render(template: str, env: dict[str, Any]) -> str:
-    """Replace each {{ expr }} with the result of eval(expr, env)."""
+    """Replace each {{ expr }} with the result of _safe_eval(expr, env).
+
+    Raises ValueError on unmatched '{{' or disallowed expressions.
+    """
     out: list[str] = []
     i = 0
     while i < len(template):
         if template[i:i+2] == "{{":
-            j = template.index("}}", i + 2)
+            try:
+                j = template.index("}}", i + 2)
+            except ValueError:
+                msg = f"unmatched '{{{{' in template: {template!r}"
+                raise ValueError(msg)  # noqa: B904
             expr = template[i+2:j].strip()
-            out.append(str(eval(expr, {"__builtins__": {}}, env)))  # noqa: S307
+            out.append(str(_safe_eval(expr, env)))
             i = j + 2
         else:
             out.append(template[i])
@@ -110,6 +195,14 @@ def select_fix(
         if not _check_requires(entry.get("requires", []), env):
             continue
         risk = entry["risk"]
+        # Validate risk value against allowed set.
+        if risk not in _ALLOWED_RISK_VALUES:
+            fix_id = entry.get("id", "<unknown>")
+            msg = (
+                f"registry entry {fix_id!r} has unknown risk={risk!r}; "
+                f"allowed: safe|proposed|escalate"
+            )
+            raise ValueError(msg)
         if risk == "escalate":
             action = "escalate"
         elif risk == "safe" and authority in AUTHORITY_AUTONOMOUS:
@@ -146,9 +239,14 @@ def _read_run_config(wandb_run: str) -> dict[str, Any]:
 def _write_next_action(
     *, path: str, template: str, ssh_host: str, overrides: list[str],
 ) -> None:
-    """Render the relaunch_template and write an executable next_action.sh."""
+    """Render the relaunch_template and write an executable next_action.sh.
+
+    Each override is shlex-quoted to prevent shell injection from W&B-sourced
+    config values.
+    """
+    quoted_overrides = " ".join(shlex.quote(o) for o in overrides)
     body = template.replace("{HOST}", ssh_host) \
-                   .replace("{OVERRIDES}", " ".join(overrides))
+                   .replace("{OVERRIDES}", quoted_overrides)
     with open(path, "w") as f:
         f.write("#!/usr/bin/env bash\n# relaunch generated by rendered.py\n"
                 "set -euo pipefail\n" + body + "\n")
@@ -167,9 +265,15 @@ def _cli(argv: list[str] | None = None) -> int:
     p.add_argument("--log-dir", required=True)
     args = p.parse_args(argv if argv is not None else sys.argv[1:])
 
+    # Validate --registry path: must exist and have a YAML suffix.
+    registry_path = Path(args.registry).resolve(strict=True)
+    if registry_path.suffix not in {".yaml", ".yml"}:
+        msg = f"--registry must be a .yaml or .yml file; got {registry_path}"
+        raise ValueError(msg)
+
     cfg = _read_run_config(args.wandb_run)
     verdict = select_fix(
-        registry_path=args.registry, failure_class=args.failure_class,
+        registry_path=str(registry_path), failure_class=args.failure_class,
         run_config=cfg, authority=args.authority,
     )
     log_path = os.path.join(args.log_dir, "fix_decision.md")

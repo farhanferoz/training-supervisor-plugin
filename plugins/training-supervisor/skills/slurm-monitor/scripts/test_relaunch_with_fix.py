@@ -6,7 +6,10 @@ The bash wrapper is smoke-tested separately in Step 5.
 from __future__ import annotations
 
 import sys
+import textwrap
 from pathlib import Path
+
+import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -80,3 +83,103 @@ def test_oom_requires_batch_size_at_least_2():
     )
     # batch_size=1 fails requires; fix should be skipped.
     assert fix is None
+
+
+# ---------------------------------------------------------------------------
+# C1: safe evaluator security regression tests
+# ---------------------------------------------------------------------------
+
+def test_safe_eval_dunder_traversal_raises():
+    """Dunder attribute traversal via __class__ must be rejected (C1 RCE PoC)."""
+    with pytest.raises(ValueError):
+        rendered._render("{{ batch_size.__class__ }}", {"batch_size": 1})
+
+
+def test_safe_eval_subscript_raises():
+    """Subscript access must be rejected."""
+    with pytest.raises(ValueError):
+        rendered._render("{{ batch_size[0] }}", {"batch_size": 1})
+
+
+def test_safe_eval_call_raises():
+    """Function calls must be rejected."""
+    with pytest.raises(ValueError):
+        rendered._render("{{ open('x') }}", {"batch_size": 1})
+
+
+def test_safe_eval_pow_raises():
+    """Exponentiation (** / Pow) must be rejected to prevent exponent overflow."""
+    with pytest.raises(ValueError):
+        rendered._render("{{ 2 ** 64 }}", {})
+
+
+def test_safe_eval_unmatched_brace_raises():
+    """Unmatched '{{' must raise ValueError with a clear message."""
+    with pytest.raises(ValueError, match="unmatched"):
+        rendered._render("{{ batch_size // 2", {"batch_size": 8})
+
+
+def test_oom_halve_batch_still_renders_correctly():
+    """Functionality preserved: oom_halve_batch renders correct values (C1 regression)."""
+    fix = rendered.select_fix(
+        registry_path=str(HERE.parent / "fixes" / "registry.yaml"),
+        failure_class="oom",
+        run_config={"datamodule": {"batch_size": 8},
+                    "trainer": {"accumulate_grad_batches": 1}},
+        authority="aggressive",
+    )
+    assert fix is not None
+    assert fix.id == "oom_halve_batch"
+    assert "datamodule.batch_size=4" in fix.hydra_overrides
+    assert "+trainer.accumulate_grad_batches=2" in fix.hydra_overrides
+
+
+def test_ifexp_allowed_in_safe_eval():
+    """IfExp (ternary) is required by the oom template and must be allowed."""
+    result = rendered._render(
+        "{{ accumulate * 2 if accumulate else 2 }}", {"accumulate": 1}
+    )
+    assert result == "2"
+
+
+# ---------------------------------------------------------------------------
+# C2: shlex-quote shell-injection regression test
+# ---------------------------------------------------------------------------
+
+def test_write_next_action_shlex_quotes_overrides(tmp_path):
+    """Override containing shell metacharacter is quoted, not injected (C2)."""
+    next_action = tmp_path / "next_action.sh"
+    rendered._write_next_action(
+        path=str(next_action),
+        template="ssh {HOST} autocast epd {OVERRIDES}",
+        ssh_host="login.example",
+        overrides=["datamodule.batch_size=32; echo INJECT"],
+    )
+    body = next_action.read_text()
+    # The semicolon must be inside quotes, not a bare shell statement separator.
+    assert "echo INJECT" not in body.split("'")[0]  # not before first quote
+    assert "'datamodule.batch_size=32; echo INJECT'" in body
+
+
+# ---------------------------------------------------------------------------
+# C1: risk-value validation
+# ---------------------------------------------------------------------------
+
+def test_select_fix_rejects_unknown_risk_value(tmp_path):
+    """select_fix must raise ValueError if a registry entry has an unknown risk."""
+    bad_registry = tmp_path / "bad.yaml"
+    bad_registry.write_text(textwrap.dedent("""\
+        fixes:
+          oom:
+            - id: test_bad_risk
+              description: "test"
+              risk: dangerous
+              hydra_overrides: []
+    """))
+    with pytest.raises(ValueError, match="unknown risk"):
+        rendered.select_fix(
+            registry_path=str(bad_registry),
+            failure_class="oom",
+            run_config={"datamodule": {"batch_size": 8}},
+            authority="aggressive",
+        )
