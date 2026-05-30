@@ -55,11 +55,15 @@ def test_collect_running_job_produces_markdown_with_state_and_trajectories():
         )
 
     assert "> contract: v1" in report  # required by CONTRACT.md
-    assert "## SLURM state" in report
+    # CONTRACT.md v1 required sections
+    assert "## job state" in report
+    assert "## progress" in report
+    assert "## heartbeat" in report
+    assert "## run state" in report
+    # Content checks
     assert "RUNNING" in report
-    assert "## W&B trajectories" in report
     assert "turing-core/autocast" in report
-    assert "## Cluster reachability" in report
+    assert "reachable: true" in report
 
 
 def test_collect_marks_partial_on_ssh_failure():
@@ -70,7 +74,7 @@ def test_collect_marks_partial_on_ssh_failure():
             ssh_host="host.example", epochs=[0],
         )
     assert "PARTIAL" in report
-    assert "Cluster reachability" in report
+    assert "reachable: false" in report
 
 
 def test_collect_refuses_when_inputs_missing():
@@ -98,3 +102,131 @@ def test_env_var_delegates_to_custom_collector(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert sentinel in out
     assert "/tmp/fake-collector.sh" in out
+
+
+# ---------------------------------------------------------------------------
+# H1: CONTRACT.md v1 section presence
+# ---------------------------------------------------------------------------
+
+def test_collect_emits_all_four_required_contract_sections():
+    """All four CONTRACT.md v1 sections must be present in correct order (H1)."""
+    sjob_out = (
+        "JobID|JobName|State|Elapsed|Start|End|Timelimit|ExitCode\n"
+        "99999|mytrain|RUNNING|02:00:00|2026-05-29T08:00:00|Unknown|24:00:00|0:0\n"
+    )
+    wbcheck_out = "state=running epoch=50\n"
+    cmds = {
+        ("ssh", "h", "sjob", "99999", "status"): sjob_out,
+        ("ssh", "h", "sjob", "99999", "when"): "end=Unknown\n",
+        ("wbcheck",): wbcheck_out,
+    }
+    with mock.patch.object(collect.subprocess, "run", side_effect=_stub_run(cmds)):
+        report = collect.collect(
+            job_id="99999", wandb_run="abc99999", ref_run=None,
+            ssh_host="h", epochs=[0, 10],
+        )
+    # Section ordering
+    idx_job = report.index("## job state")
+    idx_prog = report.index("## progress")
+    idx_hb = report.index("## heartbeat")
+    idx_run = report.index("## run state")
+    assert idx_job < idx_prog < idx_hb < idx_run
+
+    # Heartbeat verdict field present
+    assert "- verdict:" in report
+
+
+def test_collect_heartbeat_verdict_present():
+    """## heartbeat section must contain a verdict line (H1)."""
+    cmds = {
+        ("ssh", "h", "sjob", "1", "status"): (
+            "JobID|JobName|State|Elapsed|Start|End|Timelimit|ExitCode\n"
+            "1|t|RUNNING|00:01:00|x|y|01:00:00|0:0\n"
+        ),
+        ("ssh", "h", "sjob", "1", "when"): "end=later\n",
+        ("wbcheck",): "state=running\n",
+    }
+    with mock.patch.object(collect.subprocess, "run", side_effect=_stub_run(cmds)):
+        report = collect.collect(
+            job_id="1", wandb_run="e/p/r", ref_run=None,
+            ssh_host="h", epochs=[0],
+        )
+    # Heartbeat section must have verdict
+    hb_start = report.index("## heartbeat")
+    hb_block = report[hb_start:]
+    assert "verdict:" in hb_block
+
+
+# ---------------------------------------------------------------------------
+# H3: empty ssh_host runs sjob locally (no SSH hop)
+# ---------------------------------------------------------------------------
+
+def test_collect_local_mode_when_ssh_host_none():
+    """ssh_host=None must invoke sjob locally without ssh (H3)."""
+    sjob_out = (
+        "JobID|JobName|State|Elapsed|Start|End|Timelimit|ExitCode\n"
+        "7|local|RUNNING|00:30:00|x|y|04:00:00|0:0\n"
+    )
+    cmds = {
+        # Local: no "ssh" prefix
+        ("sjob", "7", "status"): sjob_out,
+        ("sjob", "7", "when"): "end=later\n",
+        ("wbcheck",): "state=running\n",
+    }
+
+    called_with: list[list[str]] = []
+
+    def recording_stub(args, *a, **kw):
+        called_with.append(list(args))
+        return _stub_run(cmds)(args, *a, **kw)
+
+    with mock.patch.object(collect.subprocess, "run", side_effect=recording_stub):
+        collect.collect(
+            job_id="7", wandb_run="abc7", ref_run=None,
+            ssh_host=None, epochs=[0],
+        )
+
+    sjob_calls = [a for a in called_with if "sjob" in a]
+    # None of the sjob calls should have "ssh" as the first element.
+    for call in sjob_calls:
+        assert call[0] != "ssh", f"Expected local sjob call but got SSH: {call}"
+
+
+def test_collect_local_mode_when_ssh_host_empty_string():
+    """ssh_host='' (empty string) must behave the same as ssh_host=None (H3)."""
+    sjob_out = (
+        "JobID|JobName|State|Elapsed|Start|End|Timelimit|ExitCode\n"
+        "8|local2|RUNNING|00:10:00|x|y|02:00:00|0:0\n"
+    )
+    cmds = {
+        ("sjob", "8", "status"): sjob_out,
+        ("sjob", "8", "when"): "end=later\n",
+        ("wbcheck",): "state=running\n",
+    }
+
+    called_with: list[list[str]] = []
+
+    def recording_stub(args, *a, **kw):
+        called_with.append(list(args))
+        return _stub_run(cmds)(args, *a, **kw)
+
+    with mock.patch.object(collect.subprocess, "run", side_effect=recording_stub):
+        collect.collect(
+            job_id="8", wandb_run="abc8", ref_run=None,
+            ssh_host="",   # empty string → local mode
+            epochs=[0],
+        )
+
+    sjob_calls = [a for a in called_with if "sjob" in a]
+    for call in sjob_calls:
+        assert call[0] != "ssh", f"Expected local sjob call but got SSH: {call}"
+
+
+# ---------------------------------------------------------------------------
+# H4: numeric job_id validation
+# ---------------------------------------------------------------------------
+
+def test_sjob_rejects_non_numeric_job_id():
+    """_sjob must raise ValueError for non-digit job_id (H4)."""
+    with pytest.raises(ValueError, match="job_id must be digits"):
+        collect._sjob("12; rm -rf /", "status", "host.example")
