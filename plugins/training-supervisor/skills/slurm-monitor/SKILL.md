@@ -16,7 +16,10 @@ Use these heuristics to inform your reasoning about SLURM evidence, not as
 rigid rules.
 
 **Dependencies (checked by `supervisor-doctor`):**
-- `ssh` configured with cert/key access to the cluster login host.
+- `ssh` configured with cert/key access to the cluster login host. Before the
+  first use, populate `~/.ssh/known_hosts` via
+  `ssh-keyscan <host> >> ~/.ssh/known_hosts`; `ssh_probe.sh` uses
+  `StrictHostKeyChecking=yes` and will refuse unknown hosts.
 - `~/bin/sjob` helper (or equivalent `sacct`/`squeue`/`scontrol` access).
 - `~/bin/wbcheck` helper (or direct `wandb.Api()` access if the user prefers).
 - The `wandb-monitor` skill installed alongside (this skill does not duplicate

@@ -45,6 +45,10 @@ for v in JOB_ID SSH_HOST REASON AUTHORITY; do
     [[ -n "${!v}" ]] || { echo "missing --${v,,}" >&2; exit 2; }
 done
 
+[[ "$JOB_ID" =~ ^[0-9]+$ ]] || {
+    echo "JOB_ID must be a positive integer (got '$JOB_ID')" >&2; exit 2
+}
+
 case "$AUTHORITY" in
     paranoid)
         echo "scancel_safe: REFUSED (authority=paranoid) job=$JOB_ID reason=$REASON" >&2
@@ -70,8 +74,13 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     rc=0
     out="(dry-run — would have executed: ${cmd[*]})"
 else
-    out="$("${cmd[@]}" 2>&1 || true)"
+    out_tmp="$(mktemp)"
+    set +e
+    "${cmd[@]}" >"$out_tmp" 2>&1
     rc=$?
+    set -e
+    out="$(cat "$out_tmp")"
+    rm -f "$out_tmp"
 fi
 
 cat >>"$log_path" <<EOF
