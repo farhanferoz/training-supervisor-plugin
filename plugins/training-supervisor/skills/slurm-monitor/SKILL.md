@@ -96,45 +96,26 @@ the supervisor calls:
 
 ## Authority Mapping (cross-ref with supervisor-doctor)
 
-| Authority | Auto-cancel hard failures (NaN / NCCL hang / crashed) | Auto-cancel stagnant | Auto-relaunch transient | Anti-loop cap (per fingerprint) |
-|---|---|---|---|---|
-| paranoid | NO | NO | NO | 0 |
-| conservative | YES | NO (propose) | NO (propose) | 1 |
-| balanced | YES | propose | YES | 2 |
-| aggressive | YES | YES | YES (from fix registry) | 3 |
+| Authority | Auto-cancel hard failures (NaN / NCCL hang / crashed) | Auto-cancel stagnant | Auto-relaunch transient |
+|---|---|---|---|
+| paranoid | NO | NO | NO |
+| conservative | YES | NO (propose) | NO (propose) |
+| balanced | YES | propose | YES |
+| aggressive | YES | YES | YES (from fix registry) |
 
 Stagnation detection uses the relative-to-reference signal from `wandb-monitor`
 (matched-epoch accuracy metric worse than reference by margin δ over N epochs);
 the precise thresholds are deferred to the per-experiment policy block in the
 config — `slurm-monitor` does not bake numbers in.
 
-## Anti-Loop Protocol
+## Anti-Loop Protocol (deferred)
 
-Before relaunching after a STOP, the supervisor:
-
-1. Computes a failure fingerprint:
-   `sha256(experiment_name + failure_class + fix_id)`. The fix_id comes from
-   the Phase 5 fix-registry lookup (or "_no_fix" if STOP without auto-fix).
-   This means: applying a *different* fix for the same failure class starts
-   a fresh counter for that (failure_class, fix_id) pair; applying the same
-   fix twice does not.
-2. Also maintains an aggregate counter
-   `aggregate_attempts[experiment_name + failure_class]` (no fix_id) so that
-   a registry with multiple fixes per failure class cannot cycle through
-   them indefinitely. Cap = `2 × anti_loop_cap[authority]` (e.g., balanced
-   = 4 aggregate attempts max across all fixes for that failure class).
-   When the aggregate cap is hit, the supervisor refuses any further fix
-   attempt for that (experiment, failure_class) until the user resets the
-   counter (delete the entry from `${STATE_DIR}/jobs/<job-id>.json` or call
-   `scripts/reset_counter.sh`).
-3. Reads `${STATE_DIR}/jobs/<job-id>.json` → `strategy.relaunch_attempts[fingerprint]`.
-4. If `attempts >= anti_loop_cap[authority]`, REFUSES to relaunch; raises a
-   "two failed retries with the same config + failure mode" notice and stops.
-5. Otherwise increments the counter, records the new launch, persists.
-
-Persistence write is the supervisor's responsibility (Phase 6), not this
-skill's. The skill returns the fingerprint and a recommended next-step
-descriptor; the orchestrator decides whether to honour it.
+> **NOT YET IMPLEMENTED.** The intended design — a per-job fingerprint
+> `sha256(experiment + failure_class + fix_id)` and authority-scoped relaunch
+> caps — is specified in `PATCH_PLAN.md` but no code in this skill currently
+> reads or writes such a counter. Until implementation lands, do not rely on
+> `aggressive`-authority loops to self-terminate after N retries; the operator
+> must manually intervene.
 
 ## Known-Fixes Registry (Phase 5 follow-on)
 

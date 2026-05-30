@@ -54,8 +54,4 @@ Or set it in supervisor-doctor's profile under `.claude/`.
 
 ## Anti-loop interaction
 
-`relaunch_with_fix.sh` updates the per-job anti-loop counter on success.
-Fingerprint = sha256(`experiment + failure_class + fix_id`). Applying a
-*different* fix for the same failure resets the count for that
-`(failure_class, fix_id)` pair, but the supervisor still surfaces
-"this is the third fix attempt overall" to the user.
+> **NOT YET IMPLEMENTED.** See `slurm-monitor/SKILL.md` → Anti-Loop Protocol (deferred).

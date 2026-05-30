@@ -4,6 +4,16 @@ Prediction-first monitoring for ML/DL training jobs. Phase-based execution with 
 
 For installation and update instructions, see the [top-level README](../../README.md).
 
+## Migration from upstream / older versions
+
+In versions before the `monitoring-logs/` → `${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}/` rename, state was written to a `monitoring-logs/` directory in the working directory. If you have an existing `monitoring-logs/` directory, migrate it once with:
+
+```bash
+mv monitoring-logs "${TRAINING_SUPERVISOR_STATE_DIR:-$HOME/.claude-job-monitor}"
+```
+
+The PreCompact hook will emit a warning to stderr if it detects `monitoring-logs/` is present but the canonical state directory is not.
+
 ## Skills
 
 | Skill | Description | Standalone? |

@@ -7,6 +7,8 @@
 # next_action.sh file with the proposed relaunch command. Under aggressive +
 # safe-risk, also EXECUTES next_action.sh. Otherwise the file is left for the
 # orchestrator to surface to the user.
+#
+# Note: anti-loop counter (per fingerprint) is NOT YET IMPLEMENTED — see SKILL.md.
 set -euo pipefail
 
 usage() {
