@@ -15,6 +15,7 @@ For installation and update instructions, see the [top-level README](../../READM
 | `wandb-monitor` | W&B monitoring: heartbeat stall detection, metric key variations, health thresholds, run comparison. | Yes |
 | `supervisor-team` | Cron-based team monitoring loop. Creates a fresh teammate each cycle to run training-supervisor. Collects user preferences (target, mode, frequency, authority, team conflict) at setup. | Yes |
 | `supervisor-doctor` | Interactive setup wizard. Detects environment, checks dependencies, installs missing ones. | Yes |
+| `slurm-monitor` | SLURM job state + remote STOP path; peer of `k8s-monitor`. Use when training is `sbatch`-scheduled. | Yes |
 
 ## Agents
 
@@ -44,8 +45,26 @@ The plugin works out of the box for single-GPU PyTorch training with log file ou
 | W&B monitoring | `wandb-primary` skill + `wandb` package | `npx skills add wandb/skills` then `pip install wandb && wandb login` |
 | K8s monitoring | `kubectl` with cluster access | See [Kubernetes docs](https://kubernetes.io/docs/tasks/tools/) |
 | GPU monitoring (baseline) | `nvidia-smi` | Pre-installed on GPU machines |
+| SLURM monitoring | `ssh` to the cluster login host; `~/bin/sjob`, `~/bin/wbcheck` user helpers | (user-installed) |
 
 Run `/supervisor-doctor` to check what is installed and install what is missing interactively.
+
+## Unattended loops (permissions overlay)
+
+Running `supervisor-team` with Q6=Local invokes `claude --print` in a sandbox
+that blocks helpers outside the working directory by default. For unattended
+operation, merge the permissions snippet into your settings.json once to make
+the loop quiet:
+
+```bash
+# Inspect the template:
+cat ${CLAUDE_SKILL_ROOT}/templates/permissions.snippet.json
+
+# Recommended: paste its permissions.allow entries (after substituting your
+# cluster SSH host) into ~/.claude/settings.json under "permissions.allow".
+# Then run /fewer-permission-prompts after one loop cycle to catch any
+# read-only operations the template missed.
+```
 
 ## Usage
 

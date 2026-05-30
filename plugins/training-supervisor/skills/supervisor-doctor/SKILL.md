@@ -126,7 +126,28 @@ If the user selects Ralph mode:
 2. The PreCompact hook is bundled with this plugin (hooks/hooks.json) and activates
    automatically. No manual hook configuration needed.
 
-### 6. Save Profile (optional)
+### 6. Permissions Overlay (for unattended loops)
+
+If the user selected Q6=Local from supervisor-team, point them at the
+permissions template so the cron loop's `claude --print` invocation isn't
+blocked by per-call approval prompts:
+
+```
+${CLAUDE_SKILL_ROOT}/templates/permissions.snippet.json
+```
+
+The template's `permissions.allow` entries should be merged into the user's
+`~/.claude/settings.json`. Replace `<SSH_HOST>` with the cluster login host
+from supervisor-doctor's environment detection.
+
+Recommend running the `fewer-permission-prompts` skill once the loop has been
+running for a session, to catch any additional read-only operations the
+supervisor calls that the snippet didn't anticipate.
+
+If the user kept Q6=Cloud (CronCreate), the cloud agent inherits Claude Code
+defaults and does not need this overlay.
+
+### 7. Save Profile (optional)
 
 If the project has a `.claude/` directory, offer to save the environment profile:
 
