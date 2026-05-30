@@ -49,6 +49,12 @@ done
     echo "JOB_ID must be a positive integer (got '$JOB_ID')" >&2; exit 2
 }
 
+# Reject newlines/control chars in --reason to prevent gate-log forgery.
+if [[ "$REASON" == *$'\n'* || "$REASON" == *$'\r'* ]]; then
+    echo "scancel_safe: --reason must not contain newline characters" >&2
+    exit 2
+fi
+
 case "$AUTHORITY" in
     paranoid)
         echo "scancel_safe: REFUSED (authority=paranoid) job=$JOB_ID reason=$REASON" >&2

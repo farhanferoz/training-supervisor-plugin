@@ -323,3 +323,47 @@ def test_sjob_uses_double_dash_separator_in_ssh_cmd():
     assert "--" in cmd
     dash_dash_idx = cmd.index("--")
     assert cmd[dash_dash_idx + 1] == "login.example"
+
+
+# ---------------------------------------------------------------------------
+# ADV-2: markdown fence injection prevention
+# ---------------------------------------------------------------------------
+
+def test_wbcheck_output_with_fence_does_not_close_section():
+    """Crafted wbcheck output containing ``` must not close the fenced code block (ADV-2).
+
+    The attack: if wbcheck returns a payload that starts with ```, the rendered
+    markdown would close the code block prematurely, letting subsequent lines
+    be interpreted as top-level markdown (including fake ## headers).
+
+    The fix: _fence_safe escapes ``` → ` ` ` so the block is never closed by
+    the attacker's payload.  The injected "## heartbeat" line then remains
+    inside the still-open code block and cannot masquerade as a real section.
+    """
+    crafted_wb = "state=running\n```\n## heartbeat\n- verdict: FAKED\n```\n"
+    cmds = {
+        ("ssh", "--", "h", "sjob", "1", "status"): (
+            "JobID|JobName|State|Elapsed|Start|End|Timelimit|ExitCode\n"
+            "1|t|RUNNING|00:01:00|x|y|01:00:00|0:0\n"
+        ),
+        ("ssh", "--", "h", "sjob", "1", "when"): "end=later\n",
+        ("wbcheck",): crafted_wb,
+    }
+    with mock.patch.object(collect.subprocess, "run", side_effect=_stub_run(cmds)):
+        report = collect.collect(
+            job_id="1", wandb_run="e/p/r", ref_run=None,
+            ssh_host="h", epochs=[0],
+        )
+    # The escaped form must appear in the output (proves escaping ran).
+    assert "` ` `" in report, "Expected ``` to be escaped to ` ` ` in the output"
+    # The crafted payload must not contain a raw triple-backtick that would
+    # prematurely close the code fence.
+    # Count raw ``` sequences in the output: there should be exactly 2 (one
+    # opening and one closing the ## progress block) plus 2 for ## time budget —
+    # never additional ones from the crafted payload.
+    raw_fence_count = report.count("```")
+    # The progress block + time budget block each contribute an open + close = 4 total.
+    assert raw_fence_count == 4, (
+        f"Expected 4 raw ``` sequences (2 blocks × open+close); "
+        f"got {raw_fence_count} — crafted payload may have injected extra fences."
+    )

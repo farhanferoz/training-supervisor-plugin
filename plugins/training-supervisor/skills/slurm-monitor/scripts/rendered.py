@@ -74,12 +74,21 @@ def _check_node(node: ast.AST) -> None:
         _check_node(child)
 
 
+_MAX_RESULT_LEN = 4096
+
+
 def _safe_eval(expr: str, env: dict[str, Any]) -> Any:
     """Evaluate *expr* against *env* using a whitelist AST visitor.
 
     Allowed: constants, name lookups, arithmetic (+/-/*//%), unary minus,
     ternary IfExp, comparisons (==, !=, <, <=, >, >=), boolean And/Or.
     Disallowed: everything else (attribute access, subscript, calls, Pow, …).
+
+    Additional guards:
+    - Result strings/bytes are capped at _MAX_RESULT_LEN chars to prevent
+      string-repetition DoS (e.g. ``"A" * 100000``).
+    - TypeError from arithmetic on non-numeric operands (e.g. str * int) is
+      re-raised as ValueError to surface a clear message.
     """
     try:
         tree = ast.parse(expr, mode="eval")
@@ -90,11 +99,22 @@ def _safe_eval(expr: str, env: dict[str, Any]) -> Any:
 
     # eval() against a restricted env with no builtins.
     # The whitelist visitor above already rejected any dangerous constructs.
-    return eval(  # noqa: S307
-        compile(tree, "<expr>", "eval"),
-        {"__builtins__": {}},
-        env,
-    )
+    try:
+        result = eval(  # noqa: S307
+            compile(tree, "<expr>", "eval"),
+            {"__builtins__": {}},
+            env,
+        )
+    except TypeError as exc:
+        msg = f"template arithmetic on non-numeric operand: {exc}"
+        raise ValueError(msg) from exc
+
+    if isinstance(result, (str, bytes)) and len(result) > _MAX_RESULT_LEN:
+        msg = (
+            f"template result too large ({len(result)} chars; cap={_MAX_RESULT_LEN})"
+        )
+        raise ValueError(msg)
+    return result
 
 
 @dataclass

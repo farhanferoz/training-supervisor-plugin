@@ -229,3 +229,21 @@ def test_select_fix_rejects_unknown_risk_value(tmp_path):
             run_config={"datamodule": {"batch_size": 8}},
             authority="aggressive",
         )
+
+
+# ---------------------------------------------------------------------------
+# ADV-1: string-repetition DoS cap + non-numeric arithmetic guard
+# ---------------------------------------------------------------------------
+
+def test_safe_eval_rejects_oversized_string_result():
+    """String repetition producing a result > _MAX_RESULT_LEN raises ValueError (ADV-1)."""
+    # "A" * 5000 would produce a 5000-char string; cap is 4096.
+    with pytest.raises(ValueError, match="template result too large"):
+        rendered._safe_eval("batch_size * 5000", {"batch_size": "A" * 10})
+
+
+def test_safe_eval_rejects_string_arithmetic():
+    """String * int arithmetic raises ValueError, not producing a large string (ADV-1)."""
+    # "AAA" * 2 would silently produce "AAAAAA" — guard catches it as TypeError or size.
+    with pytest.raises(ValueError):
+        rendered._safe_eval('x * 2', {"x": "AAA" * 2000})

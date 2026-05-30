@@ -23,6 +23,11 @@ import sys
 from typing import Iterable
 
 
+def _fence_safe(s: str) -> str:
+    """Escape triple-backtick sequences so they don't close a fenced code block."""
+    return s.replace("```", "` ` `")
+
+
 def _run(argv: list[str], timeout: int = 30) -> tuple[int, str, str]:
     """Run a subprocess; return (rc, stdout, stderr). Empty stdout on failure."""
     try:
@@ -242,7 +247,7 @@ def collect(
     lines.append("- last_step: unknown")
     lines.append("- trajectory:")
     lines.append("```")
-    lines.append(wb_out.strip() or "(wbcheck unavailable)")
+    lines.append(_fence_safe(wb_out.strip()) or "(wbcheck unavailable)")
     lines.append("```")
     lines.append("")
 
@@ -260,7 +265,7 @@ def collect(
     # Extra section: time budget (from sjob when).
     lines.append("## time budget")
     lines.append("```")
-    lines.append(when_out.strip() or "(no output)")
+    lines.append(_fence_safe(when_out.strip()) or "(no output)")
     lines.append("```")
     lines.append("")
 
