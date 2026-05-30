@@ -14,6 +14,7 @@ standalone for debugging:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from typing import Iterable
@@ -32,8 +33,10 @@ def _run(argv: list[str], timeout: int = 30) -> tuple[int, str, str]:
 
 def _sjob(job_id: str, sub: str, ssh_host: str | None) -> tuple[int, str, str]:
     """Invoke ~/bin/sjob, optionally via ssh."""
-    cmd = ["sjob", job_id, sub] if ssh_host is None else \
-          ["ssh", ssh_host, "sjob", job_id, sub]
+    if ssh_host is None:
+        cmd = ["sjob", job_id, sub]
+    else:
+        cmd = ["ssh", ssh_host, "sjob", job_id, sub]
     return _run(cmd)
 
 
@@ -98,7 +101,6 @@ def main(argv: list[str] | None = None) -> int:
     # If JOB_MONITOR_COLLECTOR is set, exec it with the same argv and exit
     # with its return code. This is the generic-collector hook documented in
     # CONTRACT.md: any conforming CLI can replace the built-in path.
-    import os
     custom = os.environ.get("JOB_MONITOR_COLLECTOR")
     if custom:
         rc = subprocess.run(

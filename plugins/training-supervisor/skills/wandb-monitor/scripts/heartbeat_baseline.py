@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import statistics
 import sys
+import time
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -81,7 +82,6 @@ def classify(
 def _fetch_and_classify(run_id: str, entity: str, project: str,
                         aggressiveness: str) -> Verdict:
     """Live path: query W&B for history, then classify."""
-    import time
     import wandb
     api = wandb.Api()
     run = api.run(f"{entity}/{project}/{run_id}")
