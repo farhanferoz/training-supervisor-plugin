@@ -2086,7 +2086,7 @@ modifying the script.
 - Create: `plugins/training-supervisor/skills/slurm-monitor/fixes/registry.yaml`
 - Create: `plugins/training-supervisor/skills/slurm-monitor/fixes/README.md`
 
-- [ ] **Step 1: Make the dir + write registry.yaml**
+- [x] **Step 1: Make the dir + write registry.yaml**
 
 ```bash
 mkdir -p ~/dev/training-supervisor-plugin/plugins/training-supervisor/skills/slurm-monitor/fixes
@@ -2140,7 +2140,7 @@ fixes:
         - "optimizer.min_lr_ratio=0.1"
 ```
 
-- [ ] **Step 2: Write `fixes/README.md`**
+- [x] **Step 2: Write `fixes/README.md`**
 
 Content:
 
@@ -2208,7 +2208,7 @@ Fingerprint = sha256(`experiment + failure_class + fix_id`). Applying a
 "this is the third fix attempt overall" to the user.
 ````
 
-- [ ] **Step 3: Verify YAML parses**
+- [x] **Step 3: Verify YAML parses**
 
 ```bash
 python -c "import yaml; print(len(yaml.safe_load(open(
@@ -2227,7 +2227,7 @@ Expected: `5` (five failure classes: oom, nccl_timeout, crashed, loss_nan, stagn
 This is a bash entrypoint that calls a small Python helper (inline or as a
 sibling). The Python is unit-testable; the bash is thin glue.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Content of `test_relaunch_with_fix.py`:
 
@@ -2316,7 +2316,7 @@ def test_oom_requires_batch_size_at_least_2():
     assert fix is None
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 ```bash
 python -m pytest plugins/training-supervisor/skills/slurm-monitor/scripts/test_relaunch_with_fix.py -v
@@ -2324,7 +2324,7 @@ python -m pytest plugins/training-supervisor/skills/slurm-monitor/scripts/test_r
 
 Expected: ImportError for `rendered`.
 
-- [ ] **Step 3: Write `rendered.py` (the fix-selection helper)**
+- [x] **Step 3: Write `rendered.py` (the fix-selection helper)**
 
 Create `plugins/training-supervisor/skills/slurm-monitor/scripts/rendered.py`:
 
@@ -2454,7 +2454,7 @@ def select_fix(
     return None
 ```
 
-- [ ] **Step 4: Run tests, verify pass**
+- [x] **Step 4: Run tests, verify pass**
 
 ```bash
 python -m pytest plugins/training-supervisor/skills/slurm-monitor/scripts/test_relaunch_with_fix.py -v
@@ -2462,7 +2462,7 @@ python -m pytest plugins/training-supervisor/skills/slurm-monitor/scripts/test_r
 
 Expected: 6 passed.
 
-- [ ] **Step 5: Add the `rendered.py` CLI (`__main__`) block**
+- [x] **Step 5: Add the `rendered.py` CLI (`__main__`) block**
 
 Append to `rendered.py` (after `select_fix`):
 
@@ -2547,7 +2547,7 @@ if __name__ == "__main__":
     raise SystemExit(_cli())
 ```
 
-- [ ] **Step 6: Write the bash wrapper**
+- [x] **Step 6: Write the bash wrapper**
 
 Create `relaunch_with_fix.sh`:
 
@@ -2647,7 +2647,7 @@ fi
 exit "$rc"
 ```
 
-- [ ] **Step 7: chmod + dry smoke**
+- [x] **Step 7: chmod + dry smoke**
 
 ```bash
 chmod +x plugins/training-supervisor/skills/slurm-monitor/scripts/relaunch_with_fix.sh
@@ -2670,7 +2670,7 @@ end-to-end smoke is reserved for the user's explicit go-ahead.
 **Files:**
 - Modify: `plugins/training-supervisor/skills/slurm-monitor/SKILL.md`
 
-- [ ] **Step 1: Add a "Known-Fixes Registry" section**
+- [x] **Step 1: Add a "Known-Fixes Registry" section**
 
 Append after the "Anti-Loop Protocol" section:
 
@@ -2693,7 +2693,7 @@ The default registry targets autocast (Hydra paths
 your own paths.
 ```
 
-- [ ] **Step 2: Update the Anti-Loop Protocol — fingerprint + aggregate cap**
+- [x] **Step 2: Update the Anti-Loop Protocol — fingerprint + aggregate cap**
 
 Replace the existing fingerprint line:
 
@@ -2727,7 +2727,7 @@ with:
 **Files:**
 - Modify: `plugins/training-supervisor/skills/training-supervisor/phases/5-act.md`
 
-- [ ] **Step 1: Extend the STOP path documentation**
+- [x] **Step 1: Extend the STOP path documentation**
 
 In the `### If STOP (autonomous)` section (already updated for slurm-monitor
 in Task B7), add at the end:
@@ -2745,7 +2745,7 @@ review" message.
 
 ### Task F5: Commit Phase F
 
-- [ ] **Step 1: Diff review + commit**
+- [x] **Step 1: Diff review + commit**
 
 ```bash
 cd ~/dev/training-supervisor-plugin && git diff --stat
