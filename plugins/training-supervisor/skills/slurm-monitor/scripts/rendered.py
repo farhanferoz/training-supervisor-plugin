@@ -199,6 +199,11 @@ def select_fix(
     """Pick the first applicable fix; render its overrides; classify action."""
     with open(registry_path) as f:
         reg = yaml.safe_load(f) or {}
+    if reg.get("version") != 1:
+        print(
+            f"warning: fix registry version != 1 (got {reg.get('version')!r})",
+            file=sys.stderr,
+        )
     fixes = reg.get("fixes", {}).get(failure_class, [])
 
     flat = _flatten(run_config)

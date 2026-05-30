@@ -66,10 +66,19 @@ contract after a future bump.
 ```
 
 ## heartbeat
-- verdict: OK|STALE|WARMUP|INSUFFICIENT_HISTORY
+- verdict: OK|STALE|WARMUP|INSUFFICIENT_HISTORY|TERMINAL
 - baseline_s: <float>
 - threshold_s: <float>
 - gap_now_s: <float>
+
+Verdict glossary:
+- **OK** — heartbeat gap is within the adaptive threshold; run appears healthy.
+- **STALE** — gap exceeds K × baseline; run may be hung or crashed.
+- **WARMUP** — run is within the 5-minute warm-up window; check is suspended.
+- **INSUFFICIENT_HISTORY** — fewer than ~5 history rows; no reliable baseline.
+- **TERMINAL** — the run has reached a final state (finished/crashed/failed/
+  completed). Treat as CONTINUE — no STOP action is needed since the run is
+  no longer active.
 
 ## run state
 - run: running|finished|crashed|failed

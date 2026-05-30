@@ -45,6 +45,12 @@ Inflection points: [where trajectories changed character]
 - Do NOT derive "criteria" from the training config
 - The description should make sense to someone who cannot see the numbers -- only the shapes
 
+**Heartbeat TERMINAL shortcut:** If the heartbeat verdict in the evidence
+bundle is `TERMINAL`, the run has already reached a final state
+(finished/crashed/failed/completed). Decide **CONTINUE-with-noted-finish**:
+note that the run terminated, do NOT trigger relaunch via Phase 5, and do
+not issue a STOP action — the job is no longer active.
+
 ## Part 2: Holistic Judgment
 
 Based on your qualitative descriptions, answer these questions:

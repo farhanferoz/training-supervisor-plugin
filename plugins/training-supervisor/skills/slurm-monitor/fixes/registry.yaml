@@ -1,8 +1,9 @@
-# version: 1
 # Default known-fixes registry. Project-specific Hydra paths are autocast-
 # flavoured (datamodule.batch_size, +trainer.accumulate_grad_batches,
 # optimizer.min_lr_ratio). Users on other stacks copy this file, edit the
 # hydra_overrides templates, and point at it via JOB_MONITOR_FIX_REGISTRY.
+
+version: 1
 
 fixes:
   oom:

@@ -120,14 +120,14 @@ with rc=0 (OK/WARMUP/INSUFFICIENT_HISTORY) or rc=1 (STALE).
 (For a baseline-15s run, those become 5 / 2.5 / 1.25 min respectively; for a
 baseline-300s run, they become 100 / 50 / 25 min.)
 
-### Quiet-by-design exception
+### Quiet-by-design phases (operational note)
 
 Some training phases (eval pass, checkpoint save, dataloader epoch boundary)
-are quiet by design. When `phases/1-predict.md`'s prediction template includes
-`expected_phase ∈ {eval, checkpoint, ...}` AND the predicted phase duration is
-not yet exceeded, the heartbeat check is **suspended** for the remainder of
-the predicted phase — verdict returns `EXPECTED_QUIET` and the supervisor
-does not treat it as STALE.
+are quiet by design. When the supervisor's Phase 1 prediction includes such
+a phase, the orchestrator should DISCOUNT a STALE verdict from heartbeat
+during the predicted phase duration — this is enforced at the orchestrator
+level, not in `classify()` itself. (Future work: a dedicated `EXPECTED_QUIET`
+verdict; not currently implemented.)
 
 ### Recommended Phase 2 wiring
 

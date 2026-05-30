@@ -145,6 +145,13 @@ The template's `permissions.allow` entries should be merged into the user's
   that match the plugin's resolved absolute path without any shell expansion.
   No further substitution is needed for those entries.
 
+After merging, verify that no `<SSH_HOST>` placeholder remains:
+```
+grep '<SSH_HOST>' ~/.claude/settings.json
+```
+The command should produce no output. If it does, the literal placeholder is
+still present and the `ssh <SSH_HOST>:*` permission entry will never match.
+
 Recommend running the `fewer-permission-prompts` skill once the loop has been
 running for a session, to catch any additional read-only operations the
 supervisor calls that the snippet didn't anticipate.

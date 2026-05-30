@@ -99,9 +99,13 @@ the supervisor calls:
 | Authority | Auto-cancel hard failures (NaN / NCCL hang / crashed) | Auto-cancel stagnant | Auto-relaunch transient |
 |---|---|---|---|
 | paranoid | NO | NO | NO |
-| conservative | YES | NO (propose) | NO (propose) |
+| conservative | YES | NO (REFUSED — operator must intervene) | NO (propose) |
 | balanced | YES | propose | YES |
 | aggressive | YES | YES | YES (from fix registry) |
+
+**On REFUSED (exit 3):** The supervisor's Phase 5 surfaces the refusal and stop
+reason to the user via AskUserQuestion. The job is NOT automatically cancelled
+and is NOT silently ignored. See `phases/5-act.md` for exit-code 3 handling.
 
 Stagnation detection uses the relative-to-reference signal from `wandb-monitor`
 (matched-epoch accuracy metric worse than reference by margin δ over N epochs);
