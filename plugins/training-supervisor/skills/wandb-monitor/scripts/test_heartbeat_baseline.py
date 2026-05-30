@@ -73,3 +73,75 @@ def test_baseline_floor():
     # 29 s is below the 300 s threshold (floor=30 × K=10), so OK
     assert verdict.verdict == "OK"
     assert verdict.baseline_s == 30.0  # floored
+
+
+# ---------------------------------------------------------------------------
+# zip-self slice bug regression
+# ---------------------------------------------------------------------------
+
+def test_short_history_intervals_are_nonzero():
+    """Short timestamp lists must produce nonzero intervals (zip-self slice bug).
+
+    The original zip(ts[-51:-1], ts[-50:]) clamped both slices to identical
+    ranges for len < 51, producing all-zero intervals and flooring the baseline
+    at 30 s regardless of actual cadence.  The fixed _compute_intervals helper
+    correctly pairs consecutive entries.
+    """
+    timestamps = [t * 60.0 for t in range(10)]  # 10 entries, 60s apart
+    intervals = hb._compute_intervals(timestamps)
+    assert len(intervals) == 9
+    assert all(i == 60.0 for i in intervals), f"expected all 60.0, got {intervals}"
+
+
+def test_compute_intervals_empty_for_single_timestamp():
+    assert hb._compute_intervals([1234567890.0]) == []
+
+
+def test_compute_intervals_empty_for_empty_list():
+    assert hb._compute_intervals([]) == []
+
+
+def test_compute_intervals_large_history_uses_recent_50():
+    """With > 51 timestamps, _compute_intervals uses only the 51 most recent."""
+    # 100 entries at 60 s intervals; the 51 most-recent produce 50 intervals.
+    timestamps = [t * 60.0 for t in range(100)]
+    intervals = hb._compute_intervals(timestamps)
+    assert len(intervals) == 50
+    assert all(i == 60.0 for i in intervals)
+
+
+# ---------------------------------------------------------------------------
+# Finished-run TERMINAL verdict
+# ---------------------------------------------------------------------------
+
+def test_finished_run_returns_terminal_not_stale():
+    """A finished run with a large gap must return TERMINAL, not STALE."""
+    v = hb.classify(
+        history_intervals_s=[60.0] * 50,
+        run_age_s=3600.0,
+        gap_now_s=86400.0,   # 1 day — would be STALE for a running job
+        aggressiveness="balanced",
+        run_state="finished",
+    )
+    assert v.verdict == "TERMINAL"
+
+
+def test_crashed_run_returns_terminal():
+    v = hb.classify(
+        history_intervals_s=[60.0] * 50,
+        run_age_s=3600.0, gap_now_s=99999.0,
+        aggressiveness="aggressive",
+        run_state="crashed",
+    )
+    assert v.verdict == "TERMINAL"
+
+
+def test_running_run_still_uses_gap_logic():
+    """run_state='running' (default) must not short-circuit to TERMINAL."""
+    v = hb.classify(
+        history_intervals_s=[60.0] * 50,
+        run_age_s=3600.0, gap_now_s=601.0,
+        aggressiveness="balanced",
+        run_state="running",
+    )
+    assert v.verdict == "STALE"

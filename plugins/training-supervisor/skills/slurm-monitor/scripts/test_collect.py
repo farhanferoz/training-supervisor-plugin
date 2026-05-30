@@ -237,6 +237,60 @@ def test_sjob_rejects_non_numeric_job_id():
 # H-new: hostname option injection prevention
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Bare wandb run-id fallback
+# ---------------------------------------------------------------------------
+
+def test_heartbeat_bare_run_id_warns_and_returns_insufficient_history(
+    monkeypatch, capsys,
+):
+    """A bare run-id without WANDB_ENTITY/PROJECT env vars emits a warning
+    and returns INSUFFICIENT_HISTORY rather than silently disabling heartbeat.
+    """
+    monkeypatch.delenv("WANDB_ENTITY", raising=False)
+    monkeypatch.delenv("WANDB_PROJECT", raising=False)
+
+    # _heartbeat is called inside collect(); test it directly to isolate.
+    result = collect._heartbeat("bare-run-id-only", ssh_host=None)
+    assert result["verdict"] == "INSUFFICIENT_HISTORY"
+    err = capsys.readouterr().err
+    assert "bare-run-id-only" in err
+    assert "WANDB_ENTITY" in err or "WANDB_PROJECT" in err
+
+
+def test_heartbeat_bare_run_id_resolves_from_env(monkeypatch):
+    """A bare run-id resolves when WANDB_ENTITY and WANDB_PROJECT are set."""
+    monkeypatch.setenv("WANDB_ENTITY", "myentity")
+    monkeypatch.setenv("WANDB_PROJECT", "myproject")
+
+    called: list[list[str]] = []
+
+    def recording_run(args, *a, **kw):
+        called.append(list(args))
+        import subprocess
+        return subprocess.CompletedProcess(args, 0,
+            stdout="OK baseline=60.0s K=10.0 threshold=600.0s gap_now=30.0s\n",
+            stderr="")
+
+    with mock.patch.object(collect.subprocess, "run", side_effect=recording_run):
+        result = collect._heartbeat("myrunid", ssh_host=None)
+
+    # Verify the subprocess was invoked with --entity, --project, --run-id.
+    hb_calls = [a for a in called if "heartbeat_baseline.py" in str(a)]
+    assert hb_calls, "heartbeat_baseline.py was not called"
+    flat = " ".join(hb_calls[0])
+    assert "--entity" in flat and "myentity" in flat
+    assert "--project" in flat and "myproject" in flat
+    assert "--run-id" in flat and "myrunid" in flat
+    assert result["verdict"] == "OK"
+
+
+def test_heartbeat_invalid_run_id_format_raises(monkeypatch):
+    """A wandb_run with 2 or 4+ slash-separated parts raises ValueError."""
+    with pytest.raises(ValueError, match="wandb_run must be"):
+        collect._heartbeat("entity/project", ssh_host=None)
+
+
 def test_sjob_rejects_hostname_starting_with_dash():
     """_sjob raises ValueError for an ssh_host beginning with '-' (H-new).
 

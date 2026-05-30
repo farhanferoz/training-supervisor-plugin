@@ -30,11 +30,24 @@ WARMUP_S = 300.0  # 5 min
 
 @dataclass(frozen=True)
 class Verdict:
-    verdict: str            # OK | STALE | WARMUP | INSUFFICIENT_HISTORY
+    verdict: str            # OK | STALE | WARMUP | INSUFFICIENT_HISTORY | TERMINAL
     baseline_s: float
     multiplier: float
     threshold_s: float
     gap_now_s: float
+
+
+def _compute_intervals(timestamps: list[float]) -> list[float]:
+    """Return consecutive inter-beat intervals from a sorted timestamp list.
+
+    Correctly handles lists shorter than 51 entries (the original
+    ``zip(ts[-51:-1], ts[-50:])`` pattern clamped both slices to the same
+    range when len < 51, producing zero-length intervals).
+    """
+    if len(timestamps) < 2:
+        return []
+    recent = timestamps[-51:]   # at most the 51 most-recent entries
+    return [b - a for a, b in zip(recent[:-1], recent[1:])]
 
 
 def classify(
@@ -42,6 +55,7 @@ def classify(
     run_age_s: float,
     gap_now_s: float,
     aggressiveness: str,
+    run_state: str = "running",
 ) -> Verdict:
     """Compute the heartbeat verdict.
 
@@ -56,11 +70,22 @@ def classify(
         Seconds since the last beat (now - heartbeat_at).
     aggressiveness
         One of paranoid / conservative / balanced / aggressive. Sets K.
+    run_state
+        W&B run state string (e.g. "running", "finished", "crashed",
+        "failed", "completed").  Terminal states return TERMINAL immediately
+        so a finished run is never mis-classified as STALE.
     """
     if aggressiveness not in MULTIPLIERS:
         msg = f"unknown aggressiveness '{aggressiveness}'"
         raise ValueError(msg)
     k = MULTIPLIERS[aggressiveness]
+
+    # Terminal states: the run ended intentionally or by error — no verdict
+    # about staleness is meaningful.
+    _TERMINAL_STATES = {"finished", "crashed", "failed", "completed"}
+    if run_state in _TERMINAL_STATES:
+        # Use MIN_BASELINE_S as a sensible placeholder; gap_now may be inf.
+        return Verdict("TERMINAL", MIN_BASELINE_S, k, k * MIN_BASELINE_S, gap_now_s)
 
     intervals = list(history_intervals_s)
     if len(intervals) < MIN_HISTORY_ROWS:
@@ -88,11 +113,8 @@ def _fetch_and_classify(run_id: str, entity: str, project: str,
     history = run.scan_history(keys=["_timestamp"], page_size=200)
     timestamps = [float(row["_timestamp"]) for row in history
                   if row.get("_timestamp") is not None]
-    if len(timestamps) < 2:
-        intervals: list[float] = []
-    else:
-        timestamps.sort()
-        intervals = [b - a for a, b in zip(timestamps[-51:-1], timestamps[-50:])]
+    timestamps.sort()
+    intervals = _compute_intervals(timestamps)
     if run.heartbeat_at:
         from datetime import datetime, timezone
         if hasattr(run.heartbeat_at, "timestamp"):
@@ -108,7 +130,9 @@ def _fetch_and_classify(run_id: str, entity: str, project: str,
     now = time.time()
     run_age = now - timestamps[0] if timestamps else 0.0
     gap_now = now - hb_at if hb_at else float("inf")
-    return classify(intervals, run_age, gap_now, aggressiveness)
+    run_state = (run.state or "running").lower()
+    return classify(intervals, run_age, gap_now, aggressiveness,
+                    run_state=run_state)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -123,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
                             args.aggressiveness)
     print(f"{v.verdict} baseline={v.baseline_s:.1f}s K={v.multiplier} "
           f"threshold={v.threshold_s:.1f}s gap_now={v.gap_now_s:.1f}s")
-    return 0 if v.verdict in ("OK", "WARMUP", "INSUFFICIENT_HISTORY") else 1
+    return 0 if v.verdict in ("OK", "WARMUP", "INSUFFICIENT_HISTORY", "TERMINAL") else 1
 
 
 if __name__ == "__main__":

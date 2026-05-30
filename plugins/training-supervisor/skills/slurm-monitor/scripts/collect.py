@@ -79,20 +79,33 @@ def _heartbeat(
     hb_script = os.path.join(
         here, "..", "..", "wandb-monitor", "scripts", "heartbeat_baseline.py"
     )
-    # heartbeat_baseline.py requires --entity/--project/--run-id; we can
-    # attempt to parse entity/project/run from a fully-qualified wandb_run id
-    # (entity/project/run) or fall back to defaults if the format differs.
+    # heartbeat_baseline.py requires --entity/--project/--run-id.
+    # Accept either a bare run-id (1 part) or a fully-qualified
+    # "entity/project/run_id" (3 parts).  For a bare id, fall back to
+    # WANDB_ENTITY / WANDB_PROJECT environment variables.
     parts = wandb_run.split("/")
     if len(parts) == 3:
         entity, project, run_id = parts
+    elif len(parts) == 1:
+        entity = os.environ.get("WANDB_ENTITY", "")
+        project = os.environ.get("WANDB_PROJECT", "")
+        run_id = parts[0]
+        if not entity or not project:
+            # Warn the operator that env vars are needed for bare run-ids.
+            print(
+                f"warning: bare run-id {run_id!r} but WANDB_ENTITY/WANDB_PROJECT "
+                "not set — heartbeat unavailable",
+                file=sys.stderr,
+            )
+            return {
+                "verdict": "INSUFFICIENT_HISTORY",
+                "baseline_s": "n/a",
+                "threshold_s": "n/a",
+                "gap_now_s": "n/a",
+            }
     else:
-        # Cannot determine entity/project — return safe defaults.
-        return {
-            "verdict": "INSUFFICIENT_HISTORY",
-            "baseline_s": "n/a",
-            "threshold_s": "n/a",
-            "gap_now_s": "n/a",
-        }
+        msg = f"wandb_run must be 'id' or 'entity/project/id', got {wandb_run!r}"
+        raise ValueError(msg)
     rc, out, _ = _run(
         [sys.executable, hb_script,
          "--run-id", run_id, "--entity", entity, "--project", project,
